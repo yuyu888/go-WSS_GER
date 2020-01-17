@@ -10,5 +10,3 @@ func main() {
     go httpServer.Init();
     wsServer.Init();
 }
-
-
