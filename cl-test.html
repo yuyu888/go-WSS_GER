@@ -6,6 +6,8 @@
         window.addEventListener("load", function(evt) {
             var output = document.getElementById("output");
             var input = document.getElementById("input");
+            var msg = document.getElementById("msg");
+
             var ws;
             var print = function(message) {
                 var d = document.createElement("div");
@@ -42,8 +44,8 @@
                     return false;
                 }
                 print("<br/>")
-                print("<sapn style='color: #D50000'>SEND:</sapn> " + input.value);
-                ws.send(input.value);
+                print("<sapn style='color: #D50000'>SEND:</sapn> " + msg.value);
+                ws.send(msg.value);
                 return false;
             };
             document.getElementById("close").onclick = function(evt) {
@@ -70,10 +72,12 @@
             You can change the message and send multiple times.
         </p>
             <form>
+                <textarea rows="10" id="msg" style="outline:none;" cols="100">{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+                <br/>
                 <button id="open">Open</button>
                 <button id="close">Close</button>
-            <input id="input" type="text" value="Hello world!">
             <button id="send">Send</button>
+
                 <button id="clear">clear</button>
             </form>
     </td><td valign="top" width="50%">

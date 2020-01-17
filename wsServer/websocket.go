@@ -92,12 +92,12 @@ func (wsConn *wsConnection)procLoop() {
             uid=wsConn.deviceId
         }
         for {
-            time.Sleep(10 * time.Second)
+            time.Sleep(100 * time.Second)
             if wsConn.isDynamic==true{
                 wsConn.isDynamic = false
                 continue
             }
-            heartBeat := `{"wssid":"`+wsConn.wssid+`","request_id":"","response_data":"heartbeat from server","action":"wsHeartBeat"}`
+            heartBeat := `{"errcode":200, "wssid":"`+wsConn.wssid+`","request_id":"","response_data":"heartbeat from server","action":"wsHeartBeat"}`
             if err := wsConn.wsSocket.WriteMessage(websocket.TextMessage, []byte(heartBeat)); err != nil {
                 fmt.Println("heartbeat fail")
                 wsConn.wsClose()
@@ -141,13 +141,14 @@ func (wsConn *wsConnection)procLoop() {
 
 func doProcess(msg []byte, wsConn *wsConnection, ch chan bool, wg *sync.WaitGroup){
     defer wg.Done()
-    reqerr := process(msg, wsConn)
-    if(reqerr!=nil){
-        err := wsConn.wsWrite(1, []byte(fmt.Sprintf("%s", reqerr)))
-        if err != nil {
-            fmt.Println("write fail")
-        }
-    }
+    process(msg, wsConn)
+    //reqerr := process(msg, wsConn)
+    //if(reqerr!=nil){
+    //    err := wsConn.wsWrite(1, []byte(fmt.Sprintf("%s", reqerr)))
+    //    if err != nil {
+    //        fmt.Println("write fail")
+    //    }
+    //}
     <- ch
 }
 
@@ -168,7 +169,7 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
         isClosed: false,
     }
     if deviceId==""{
-        resp := `{"wssid":"`+wsConn.wssid+`","request_id":"","response_data":"Lack of device_id","action":"error"}`
+        resp := `{"errcode":4001, "wssid":"`+wsConn.wssid+`","request_id":"","response_data":"Lack of device_id","action":"error"}`
         wsConn.wsSocket.WriteMessage(1, []byte(resp))
         wsConn.wsSocket.Close()
         return
@@ -223,7 +224,7 @@ func (wsConn *wsConnection)wsClose() {
 
 func (wsConn *wsConnection)wsInit() {
     wsConn.wssid = uuid.NewV4().String()
-    resp := `{"wssid":"`+wsConn.wssid+`","request_id":"","response_data":"websocket create success","action":"wsInit"}`
+    resp := `{"errcode":200, "wssid":"`+wsConn.wssid+`","request_id":"","response_data":"websocket create success","action":"wsInit"}`
     wsConn.wsWrite(websocket.TextMessage, []byte(resp))
     WsManager.doRegister(wsConn)
 }

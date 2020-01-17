@@ -11,7 +11,7 @@ import (
     "wssgo/libs"
 )
 
-func request(reqParams *RequestData)(string) {
+func request(reqParams *RequestData)(string, error) {
     var requestUrl string
 
     u, err := url.Parse(reqParams.RequestUrl)
@@ -20,7 +20,7 @@ func request(reqParams *RequestData)(string) {
     }
     if _, ok := UrlList[requestUrl]; !ok {
         fmt.Println(requestUrl)
-        return "Illegal request, url is not allowed"
+        return "", errors.New("Illegal request, url is not allowed")
     }
     req := curl.NewRequest()
     resp, err := req.SetUrl(reqParams.RequestUrl).
@@ -29,15 +29,12 @@ func request(reqParams *RequestData)(string) {
         SetHeaders(reqParams.Headers).
         Send()
     if err != nil {
-        return  fmt.Sprintf("%s", err)
+        return "", err
     } else {
         if resp.IsOk() {
-            fmt.Println(2222)
-
-            return  resp.Body
+            return resp.Body, nil
         } else {
-            return  "httpStatus:"+ strconv.Itoa(resp.Raw.StatusCode)
-
+            return "", errors.New("httpStatus:"+ strconv.Itoa(resp.Raw.StatusCode))
         }
     }
 
@@ -50,20 +47,26 @@ func process(message []byte, wsConn *wsConnection)(error) {
 
     err := json.Unmarshal(message, &wsReqParams)
     if err != nil {
-        //wsConn.wsWrite(1, []byte("传入参数json解析失败"))
-        return errors.New("传入参数json解析失败")
+        resp := `{"errcode":4004, "wssid":"`+wsConn.wssid+`","request_id":"","response_data":" incoming parameter parsing failed， need json","action":"error"}`
+        wsConn.wsWrite(1, []byte(resp))
+        return nil
     }
 
     cwerr := checkWsReqData(wsReqParams, &wsReqData, &wsRespData)
     if cwerr!=nil  {
-        return cwerr
+        //resp := `{"errcode":`+wsRespData.ErrorCode+`, "wssid":"`+wsConn.wssid+`","request_id":"`+wsRespData.RequestId+`","response_data":"`+fmt.Sprintf("%s", cwerr)+`","action":"error"}`
+        //wsConn.wsWrite(1, []byte(resp))
+        wsRespData.ResponseData = fmt.Sprintf("%s", cwerr)
+        wsRespData.Action="error"
+        display(&wsRespData, wsConn)
+        return nil
     }
 
     switch wsReqData.RequestType {
         case "req&resp":
             doRequestBusiness(wsReqData.RequestData, &wsRespData, wsConn)
         case "broadcast":
-            doBroadcast(wsReqData.RequestData, &wsRespData, wsConn)
+            doSendMsgToWssid(wsReqData.RequestData, &wsRespData, wsConn)
         default:
             wsConn.wsWrite(1, []byte("request_type: "+wsReqData.RequestType+" 非法"))
     }
@@ -71,18 +74,14 @@ func process(message []byte, wsConn *wsConnection)(error) {
 }
 
 func checkWsReqData(wsReqParams map[string]interface{},  wsReqData *WsRequestData, wsRespData *ResponseData)(error){
-    RequestType, ok := wsReqParams["request_type"].(string)
-    if(ok){
-        wsReqData.RequestType = RequestType
-    }else{
-        return errors.New("Lack of request_type")
-    }
+
 
     RequestId, ok := wsReqParams["request_id"].(string)
     if(ok){
         wsReqData.RequestId  = RequestId
         wsRespData.RequestId = RequestId
     }else{
+        wsRespData.ErrorCode = 4201
         return errors.New("Lack of request_id")
     }
     Wssid, ok := wsReqParams["wssid"].(string)
@@ -90,12 +89,23 @@ func checkWsReqData(wsReqParams map[string]interface{},  wsReqData *WsRequestDat
         wsReqData.Wssid = Wssid
         wsRespData.Wssid = Wssid
     }else{
+        wsRespData.ErrorCode = 4202
         return errors.New("Lack of wssid")
     }
+
+    RequestType, ok := wsReqParams["request_type"].(string)
+    if(ok){
+        wsReqData.RequestType = RequestType
+    }else{
+        wsRespData.ErrorCode = 4203
+        return errors.New("Lack of request_type")
+    }
+
     RequestData, ok := wsReqParams["request_data"].(map[string]interface{})
     if(ok){
         wsReqData.RequestData = RequestData
     }else{
+        wsRespData.ErrorCode = 4204
         return errors.New("Lack of request_data")
     }
     Action, ok := wsReqParams["action"].(string)
@@ -103,56 +113,59 @@ func checkWsReqData(wsReqParams map[string]interface{},  wsReqData *WsRequestDat
         wsReqData.Action = Action
         wsRespData.Action = Action
     }else{
+        wsRespData.ErrorCode = 4205
         return errors.New("Lack of action")
     }
     return nil
 }
 func doRequestBusiness(reqParams map[string]interface{}, wsRespData *ResponseData, wsConn *wsConnection)(error) {
-    //fmt.Println(reqParams)
     var reqData RequestData
-    crerr := checkReqParams(reqParams, &reqData)
+    errorCode, crerr := checkReqParams(reqParams, &reqData)
     if crerr!=nil  {
+        wsRespData.ErrorCode=errorCode
         wsRespData.ResponseData = fmt.Sprintf("%s", crerr)
     }else{
-        respRs :=request(&reqData)
-        wsRespData.ResponseData = respRs
+        respRs, error:=request(&reqData)
+        if error==nil{
+            wsRespData.ResponseData = respRs
+            wsRespData.ErrorCode=errorCode
+        }else{
+            wsRespData.ResponseData = fmt.Sprintf("%s", error)
+            wsRespData.ErrorCode=5001
+        }
     }
     display(wsRespData, wsConn)
     return  nil
 }
 
-func checkReqParams(reqParams map[string]interface{},  reqData *RequestData)(error){
-    fmt.Println(reqParams)
-
+func checkReqParams(reqParams map[string]interface{},  reqData *RequestData)(int, error){
     HttpMethod, ok := reqParams["http_method"].(string)
     if(ok){
         reqData.HttpMethod = HttpMethod
     }else{
-        return errors.New("Lack of http_method")
+        return 4101, errors.New("Lack of http_method")
     }
 
     RequestUrl, ok := reqParams["request_url"].(string)
     if(ok){
         reqData.RequestUrl = RequestUrl
     }else{
-        return errors.New("Lack of request_url")
+        return 4102, errors.New("Lack of request_url")
     }
     PostData, ok := reqParams["post_data"].(string)
     if(ok){
         reqData.PostData = PostData
     }else{
-        return errors.New("Lack of post_data")
+        return 4103, errors.New("Lack of post_data")
     }
-    fmt.Println(reqParams["headers"])
-
     Headers, ok := reqParams["headers"].(map[string]interface{})
     if(ok){
         reqData.Headers = libs.MapInterfaceToMapString(Headers)
     }else{
-        return errors.New("Lack of headers")
+        return 4104, errors.New("Lack of headers")
 
     }
-    return nil
+    return 200, nil
 }
 
 func display(wsRespData *ResponseData, wsConn *wsConnection){
@@ -163,7 +176,7 @@ func display(wsRespData *ResponseData, wsConn *wsConnection){
     wsConn.wsWrite(1, result)
 }
 
-func doBroadcast(reqParams map[string]interface{}, wsRespData *ResponseData, wsConn *wsConnection)(error) {
+func doSendMsgToWssid(reqParams map[string]interface{}, wsRespData *ResponseData, wsConn *wsConnection)(error) {
     wssid, ok := reqParams["wssid"].(string)
     if(!ok){
         return errors.New("Lack of wssid")
@@ -173,7 +186,7 @@ func doBroadcast(reqParams map[string]interface{}, wsRespData *ResponseData, wsC
     if(!ok){
         return errors.New("Lack of message")
     }
-    WsManager.doBroadcast(wssid, []byte(message), wssid)
+    WsManager.doSendMsgToWssid(wssid, []byte(message))
     wsRespData.ResponseData = "信息：" + message+" 发送给 " + wssid
     display(wsRespData, wsConn)
     return nil

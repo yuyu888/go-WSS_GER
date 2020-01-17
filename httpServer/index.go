@@ -4,6 +4,7 @@ package httpServer
 import (
     "fmt"
     "net/http"
+    "time"
 // "log"
 )
 
@@ -32,6 +33,7 @@ func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpHandlerTest(w http.ResponseWriter, r *http.Request) {
+    time.Sleep(2 * time.Second)
     query := r.URL.Query()
     id := query.Get("id")
     message := r.PostFormValue("msg")

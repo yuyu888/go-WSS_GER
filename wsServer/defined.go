@@ -21,4 +21,5 @@ type ResponseData struct {
     RequestId string  `json:"request_id"` //客户端请求的唯一的ID， 每次请求生成一个uuid
     ResponseData string `json:"response_data"` //返回值
     Action string `json:"action"`  //请求动作
+    ErrorCode int `json:"errcode"`
 }

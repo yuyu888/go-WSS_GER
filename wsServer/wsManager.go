@@ -1,7 +1,7 @@
 package wsServer
 
 import (
-    //"fmt"
+    "fmt"
     //"encoding/json"
 )
 
@@ -93,4 +93,12 @@ func (WsManager *ClientManager) doBroadcast(deviceId string, message []byte, uid
     //}else{
     //    fmt.Println("websocket link is drop")
     //}
+}
+
+func (WsManager *ClientManager) doSendMsgToWssid(wssid string, message []byte) {
+    if cl, ok := WsManager.clients[wssid]; ok {
+        cl.wsConn.wsWrite(1, message)
+    }else{
+        fmt.Println("websocket link is drop")
+    }
 }
