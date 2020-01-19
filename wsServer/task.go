@@ -54,8 +54,6 @@ func process(message []byte, wsConn *wsConnection)(error) {
 
     cwerr := checkWsReqData(wsReqParams, &wsReqData, &wsRespData)
     if cwerr!=nil  {
-        //resp := `{"errcode":`+wsRespData.ErrorCode+`, "wssid":"`+wsConn.wssid+`","request_id":"`+wsRespData.RequestId+`","response_data":"`+fmt.Sprintf("%s", cwerr)+`","action":"error"}`
-        //wsConn.wsWrite(1, []byte(resp))
         wsRespData.ResponseData = fmt.Sprintf("%s", cwerr)
         wsRespData.Action="error"
         display(&wsRespData, wsConn)
