@@ -60,7 +60,7 @@ func (WsManager *ClientManager) doUnRegister(conn *wsConnection) {
 
 }
 
-func (WsManager *ClientManager) doBroadcast(deviceId string, message []byte, uid string) {
+func (WsManager *ClientManager) DoBroadcast(deviceId string, message []byte, uid string) {
     if uid==""{
         uid = deviceId
     }
