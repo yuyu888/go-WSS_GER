@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script>
+        window.addEventListener("load", function(evt) {
+            var output = document.getElementById("output");
+            var input = document.getElementById("input");
+            var msg = document.getElementById("msg");
+
+            var ws;
+            var print = function(message) {
+                var d = document.createElement("div");
+                d.innerHTML = message;
+                output.appendChild(d);
+            };
+            var clear = function(){
+                output.innerHTML=''
+            }
+
+            document.getElementById("open").onclick = function(evt) {
+                if (ws) {
+                    return false;
+                }
+                ws = new WebSocket("ws://localhost:80/ws?device_id=bbb");
+                ws.onopen = function(evt) {
+                    print("OPEN");
+                }
+                ws.onclose = function(evt) {
+                    print("CLOSE");
+                    ws = null;
+                }
+                ws.onmessage = function(evt) {
+                    print("<br/>")
+                    print("<span style='color:blue'>RESPONSE:</span> " + evt.data);
+                }
+                ws.onerror = function(evt) {
+                    print("ERROR: " + evt.data);
+                }
+                return false;
+            };
+            document.getElementById("send").onclick = function(evt) {
+                if (!ws) {
+                    return false;
+                }
+                print("<br/>")
+                print("<sapn style='color: #D50000'>SEND:</sapn> " + msg.value);
+                ws.send(msg.value);
+                return false;
+            };
+            document.getElementById("close").onclick = function(evt) {
+                if (!ws) {
+                    return false;
+                }
+                ws.close();
+                return false;
+            };
+            document.getElementById("clear").onclick = function(evt) {
+                clear()
+                return false;
+            };
+
+        });
+
+    </script>
+</head>
+<body>
+<table>
+    <tr><td valign="top" width="50%">
+        <p>Click "Open" to create a connection to the server,
+            "Send" to send a message to the server and "Close" to close the connection.
+            You can change the message and send multiple times.
+        </p>
+            <form>
+                <textarea rows="10" id="msg" style="outline:none;" cols="100">{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+                <br/>
+                <button id="open">Open</button>
+                <button id="close">Close</button>
+            <button id="send">Send</button>
+
+                <button id="clear">clear</button>
+            </form>
+    </td><td valign="top" width="50%">
+        <div id="output"></div>
+    </td></tr></table>
+</body>
+</html>
