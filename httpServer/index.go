@@ -5,7 +5,8 @@ import (
     "fmt"
     "net/http"
     "time"
-// "log"
+    "wssgo/wsServer"
+    // "log"
 )
 
 func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
@@ -41,9 +42,19 @@ func httpHandlerTest(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintln(w, result)
 }
 
+func httpHandlerSendMsgToWssid(w http.ResponseWriter, r *http.Request) {
+    query := r.URL.Query()
+    wssid := query.Get("wssid")
+    message := query.Get("msg")
+    wsServer.WsManager.DoSendMsgToWssid(wssid, []byte(message))
+    fmt.Fprintln(w, "信息：" + message+" 发送给 " + wssid)
+}
+
+
 func Init() {
     fmt.Println("httpServer is run")
     http.HandleFunc("/", httpHandlerIndex)
     http.HandleFunc("/test", httpHandlerTest)
+    http.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
     http.ListenAndServe("0.0.0.0:80", nil)
 }

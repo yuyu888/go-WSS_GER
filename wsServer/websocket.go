@@ -106,23 +106,6 @@ func (wsConn *wsConnection)procLoop() {
         }
     }()
 
-    // 这是一个同步处理模型（只是一个例子），如果希望并行处理可以每个请求一个gorutine，注意控制并发goroutine的数量!!!
-    //for {
-    //	msg, err := wsConn.wsRead()
-    //	if err != nil {
-    //		fmt.Println("read fail")
-    //		break
-    //	}
-    //	reqerr := process(msg.data, wsConn)
-    //	if(reqerr!=nil){
-    //		err = wsConn.wsWrite(msg.messageType, []byte(fmt.Sprintf("%s", reqerr)))
-    //		if err != nil {
-    //			fmt.Println("write fail")
-    //			break
-    //		}
-    //	}
-    //}
-
     gch := make(chan bool, 2)
     var wg = sync.WaitGroup{}
     for{
