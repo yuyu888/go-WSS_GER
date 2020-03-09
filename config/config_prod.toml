@@ -12,6 +12,13 @@ server = [
        ]
 port = "2379"
 
+[rpc]
+addr = "172.18.71.56:6767"
+port = 50051
+network = "tcp"
+basepath = "/transit_go"
+registername = "transitData"
+
 [redis]
 addr = "172.18.8.205:6384"
 password = ""

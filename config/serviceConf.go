@@ -12,7 +12,7 @@ type ServiceConfig struct {
     EtcdConf EtcdConfig	`mapstructure:"etcd"`
     RedisConf RedisConfig `mapstructure:"redis"`
     //TransitConf TransitConfig `mapstructure:"transit"`
-    //RpcConf RpcConfig `mapstructure:"rpc"`
+    RpcConf RpcConfig `mapstructure:"rpc"`
     LocalIp string
     BaseConf BaseConfig `mapstructure:"base"`
 }
@@ -34,13 +34,13 @@ type RedisConfig struct {
 //    Addr string `mapstructure:"addr"`
 //}
 //
-//type RpcConfig struct {
-//    Addr string `mapstructure:"addr"`
-//    Port string `mapstructure:"port"`
-//    NetWork string `mapstructure:"network"`
-//    RegisterName string `mapstructure:"registername"`
-//    BasePath string `mapstructure:"basepath"`
-//}
+type RpcConfig struct {
+    Addr string `mapstructure:"addr"`
+    Port string `mapstructure:"port"`
+    NetWork string `mapstructure:"network"`
+    RegisterName string `mapstructure:"registername"`
+    BasePath string `mapstructure:"basepath"`
+}
 
 type BaseConfig struct {
     Env string `mapstructure:"env"`

@@ -2,10 +2,7 @@ package libs
 
 import (
     "github.com/go-redis/redis"
-    //"sync"
     "time"
-    //"errors"
-    // "fmt"
     "wssgo/config"
 )
 
