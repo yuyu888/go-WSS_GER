@@ -1,6 +1,6 @@
 package wsServer
 import (
-    //"context"
+    "context"
     "github.com/smallnest/rpcx/server"
     "github.com/smallnest/rpcx/serverplugin"
     "github.com/rcrowley/go-metrics"
@@ -8,14 +8,18 @@ import (
     "time"
     "wssgo/config"
     //"encoding/json"
+    "wssgo/model"
+    "wssgo/libs"
+
 )
 
 type TransitData struct{
 
 }
 
-func (t *TransitData) Dispatch () error {
-    return nil;
+func (t *TransitData) Dispatch (ctx context.Context, args *model.Message,  reply *model.Reply) error {
+    libs.Logger.Infof("rpc receive param:%v, send ret:%v", args, reply)
+    return nil
 }
 
 func InitRpcServer(){
