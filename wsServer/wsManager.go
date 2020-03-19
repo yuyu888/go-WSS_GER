@@ -3,6 +3,8 @@ package wsServer
 import (
     "fmt"
     //"encoding/json"
+    "wssgo/model"
+    "wssgo/config"
 )
 
 //客户端管理
@@ -31,13 +33,25 @@ var WsManager = ClientManager{
 }
 
 func (WsManager *ClientManager) ProcLoop() {
+    usersession := model.NewUserSession()
     for {
         select {
             //如果有新的连接接入,就通过channel把连接传递给conn
             case conn := <-WsManager.register:
             //把客户端的连接设置为true
                 WsClientPools.save(conn.id, conn)
-            //如果连接断开了
+                //WsManager.clients[conn.id] = conn
+                uid := conn.wsConn.loginUid
+                if uid=="" {
+                    uid = conn.wsConn.deviceId
+                }
+                wsInfo := &model.Session{WsServerAddr:config.ServiceConf.LocalIp, WssId:conn.wsConn.wssid}
+                err := usersession.SaveInfo(uid, conn.wsConn.deviceId, wsInfo)
+                fmt.Println(uid)
+                fmt.Println(conn.wsConn.deviceId)
+                fmt.Println(wsInfo)
+                fmt.Println(err)
+        //如果连接断开了
             case conn := <-WsManager.unregister:
                 WsClientPools.remove(conn.id)
         }
@@ -45,6 +59,7 @@ func (WsManager *ClientManager) ProcLoop() {
 }
 
 func (WsManager *ClientManager) doRegister(conn *wsConnection) {
+    fmt.Println("111111")
     //每一次连接都会新开一个client，client.id通过uuid生成保证每次都是不同的
     clientId := conn.wssid
     client := &Client{id: clientId, wsConn: conn}

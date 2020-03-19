@@ -33,7 +33,7 @@ type wsConnection struct {
     isClosed bool
     closeChan chan byte  // 关闭通知
     wssid string //ws链接id 连接建立时产生
-    mfwUid string // 登录用户uid
+    loginUid string // 登录用户uid
     deviceId string //设备号
     isDynamic bool //是否活跃
 }
@@ -87,7 +87,7 @@ func (wsConn *wsConnection)wsWriteLoop() {
 func (wsConn *wsConnection)procLoop() {
     // 启动一个gouroutine发送心跳
     go func() {
-        uid := wsConn.mfwUid
+        uid := wsConn.loginUid
         if uid==""{
             uid=wsConn.deviceId
         }
@@ -159,13 +159,13 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
     }else{
         wsConn.deviceId = deviceId
     }
-    mfwUid, err := req.Cookie("uid")
+    loginUid, err := req.Cookie("uid")
     if err ==nil{
-        wsConn.mfwUid = mfwUid.Value
-        fmt.Println(mfwUid.Value)
+        wsConn.loginUid = loginUid.Value
+        fmt.Println(loginUid.Value)
 
     }else{
-        wsConn.mfwUid =""
+        wsConn.loginUid =""
     }
     wsConn.wsInit()
     // 处理器

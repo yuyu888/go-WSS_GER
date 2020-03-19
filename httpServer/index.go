@@ -6,6 +6,7 @@ import (
     "net/http"
     "time"
     "wssgo/wsServer"
+    "wssgo/model"
     // "log"
 )
 
@@ -50,11 +51,29 @@ func httpHandlerSendMsgToWssid(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintln(w, "信息：" + message+" 发送给 " + wssid)
 }
 
+func httpHandlerSendMsg(w http.ResponseWriter, r *http.Request) {
+    query := r.URL.Query()
+    uid := query.Get("uid")
+    deviceId := query.Get("deviceid")
+    fmt.Fprintln(w, "uid：" + uid+" deviceid: " + deviceId)
+
+    usersession := model.NewUserSession()
+    userinfo, err := usersession.GetInfo(uid, deviceId)
+    if err != nil{
+        fmt.Println(err)
+    }else{
+        fmt.Fprintln(w, userinfo)
+
+    }
+}
+
+
 
 func Init() {
     fmt.Println("httpServer is run")
     http.HandleFunc("/", httpHandlerIndex)
     http.HandleFunc("/test", httpHandlerTest)
     http.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
+    http.HandleFunc("/sendmsg", httpHandlerSendMsg)
     http.ListenAndServe("0.0.0.0:80", nil)
 }

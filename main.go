@@ -2,7 +2,7 @@ package main
 
 import (
     "wssgo/wsServer"
-    //"wssgo/httpServer"
+    "wssgo/httpServer"
     "wssgo/config"
     "fmt"
     "flag"
@@ -33,7 +33,7 @@ func main() {
     rVal, err:= redisCli.Get("test")
     fmt.Println(rVal)
     fmt.Println(config.ServiceConf.RpcConf.Addr)
-    wsServer.InitRpcServer()
-    //go httpServer.Init();
-    //wsServer.Init();
+    //wsServer.InitRpcServer()
+    go httpServer.Init();
+    wsServer.Init();
 }
