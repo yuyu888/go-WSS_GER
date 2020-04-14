@@ -8,30 +8,34 @@ import (
     "wssgo/wsServer"
     "wssgo/model"
     // "log"
+    //"sync"
+    //"sync/atomic"
 )
 
 func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
-    result  := "hello word"
-    fmt.Fprintln(w, result)
 
-    //query := r.URL.Query()
+
+    query := r.URL.Query()
     //msg := query.Get("msg")
-    //uid := query.Get("uid")
-    //if uid!="" {
-    //    c1 := http.Cookie{
-    //        Name:     "mfw_uid",
-    //        Value:    uid,
-    //        HttpOnly: true,
-    //    }
-    //    // 把cookie写入客户端
-    //    http.SetCookie(w, &c1)
-    //}
+    uid := query.Get("uid")
+    if uid!="" {
+        c1 := http.Cookie{
+            Name:     "uid",
+            Value:    uid,
+            HttpOnly: true,
+        }
+        // 把cookie写入客户端
+        http.SetCookie(w, &c1)
+    }
 
     //message := r.PostFormValue("params")
     //fmt.Fprintln(w, message)
     //
     //result  := msg + message + " is task return"
     //fmt.Fprintln(w, result)
+
+    result  := "hello word"
+    fmt.Fprintln(w, result)
 }
 
 func httpHandlerTest(w http.ResponseWriter, r *http.Request) {
@@ -55,17 +59,71 @@ func httpHandlerSendMsg(w http.ResponseWriter, r *http.Request) {
     query := r.URL.Query()
     uid := query.Get("uid")
     deviceId := query.Get("deviceid")
-    fmt.Fprintln(w, "uid：" + uid+" deviceid: " + deviceId)
+    msg := r.PostFormValue("msg")
+
+    if len(uid) == 0 && len(deviceId) == 0 {
+        resp := `{"errcode":4001, "response_data":"uid, deviceId is empty"}`
+        fmt.Fprintln(w, resp)
+        return ;
+    }
+    if len(msg) == 0 {
+        resp := `{"errcode":4002, "response_data":"msg is empty"}`
+        fmt.Fprintln(w, resp)
+        return ;
+    }
 
     usersession := model.NewUserSession()
+
     userinfo, err := usersession.GetInfo(uid, deviceId)
     if err != nil{
-        fmt.Println(err)
+        resp := `{"errcode":5003, "something is wrong for getuserinfo "}`
+        fmt.Fprintln(w, resp)
+        return ;
     }else{
         fmt.Fprintln(w, userinfo)
-
     }
+    //var sendCount int32 = 0
+    for device_id, sessionInfo := range userinfo {
+        serverAddr, err := usersession.GetWsServer(sessionInfo);
+        if err != nil || len(serverAddr) == 0 {
+            continue;
+        }
+        fmt.Fprintln(w,fmt.Sprintf("%s", serverAddr))
+        fmt.Fprintln(w, device_id)
+        fmt.Fprintln(w, sessionInfo)
+
+
+
+        //go push(&wg, &model.Message{Uid:toUid, DeviceId:deviceId, Body:msg}, string(serverAddr), &sendCount);
+    }
+
+    //data := map[string]int32{"send_count": sendCount};
 }
+
+//func push( msg *model.Message, serverAddr string) {
+//    cl, ok := GetRpcClient(serverAddr, 1);
+//    if !ok {
+//        return ;
+//    }
+//    reply := new(model.Reply);
+//    RpcCall(cl, msg, reply);
+//    if reply.Status > 0 {
+//        return ;
+//    }
+//    return;
+//}
+
+//func httpHandlerSetRedis(w http.ResponseWriter, r *http.Request) {
+//    query := r.URL.Query()
+//    uid := query.Get("uid")
+//    deviceId := query.Get("deviceid")
+//    fmt.Fprintln(w, "uid：" + uid+" deviceid: " + deviceId)
+//
+//    usersession := model.NewUserSession()
+//    wsInfo := &model.Session{WsServerAddr:"127.0.0.1", WssId:"123567"}
+//    err := usersession.SaveInfo(uid, deviceId, wsInfo)
+//    fmt.Println(err)
+//}
 
 
 
@@ -73,6 +131,7 @@ func Init() {
     fmt.Println("httpServer is run")
     http.HandleFunc("/", httpHandlerIndex)
     http.HandleFunc("/test", httpHandlerTest)
+    //http.HandleFunc("/setredis", httpHandlerSetRedis)
     http.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
     http.HandleFunc("/sendmsg", httpHandlerSendMsg)
     http.ListenAndServe("0.0.0.0:80", nil)

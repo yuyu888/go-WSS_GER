@@ -5,6 +5,7 @@ import (
     "errors"
     "encoding/json"
     "time"
+    //"fmt"
 )
 
 const (
@@ -38,7 +39,6 @@ func (u UserSession)GetInfo(uid string, deviceid string) (userInfo map[string]st
     if len(uid) > 0 && len(deviceid) > 0 {
         info, err := u.redisCli.HGet(cachePrefix + uid, deviceid);
         if err != nil {
-            libs.Logger.Errorf("get userinfo err:", err, uid, deviceid);
             return userInfo, err;
         }
         userInfo[deviceid] = info;
@@ -47,15 +47,12 @@ func (u UserSession)GetInfo(uid string, deviceid string) (userInfo map[string]st
     if len(uid) > 0 {
         userInfo, err = u.redisCli.HGetAll(cachePrefix + uid);
         if err != nil {
-            libs.Logger.Errorf("get userinfo from uid error!" + uid);
         }
-        libs.Logger.Info("redis userinfo:", userInfo);
         return userInfo, err;
     }
     if len(deviceid) > 0 {
         info, err := u.redisCli.HGet(cachePrefix + deviceid, deviceid);
         if err != nil {
-            libs.Logger.Errorf("get userinfo from deviceid error!" + deviceid);
             return userInfo, err;
         }
         userInfo[deviceid] = info;

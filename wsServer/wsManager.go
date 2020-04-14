@@ -47,10 +47,14 @@ func (WsManager *ClientManager) ProcLoop() {
                 }
                 wsInfo := &model.Session{WsServerAddr:config.ServiceConf.LocalIp, WssId:conn.wsConn.wssid}
                 err := usersession.SaveInfo(uid, conn.wsConn.deviceId, wsInfo)
+                fmt.Println("================")
+
                 fmt.Println(uid)
                 fmt.Println(conn.wsConn.deviceId)
                 fmt.Println(wsInfo)
                 fmt.Println(err)
+                fmt.Println("================")
+
         //如果连接断开了
             case conn := <-WsManager.unregister:
                 WsClientPools.remove(conn.id)
