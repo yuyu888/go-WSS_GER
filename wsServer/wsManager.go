@@ -51,6 +51,12 @@ func (WsManager *ClientManager) ProcLoop() {
         //如果连接断开了
             case conn := <-WsManager.unregister:
                 WsClientPools.remove(conn.id)
+                uid := conn.wsConn.loginUid
+                if uid=="" {
+                    uid = conn.wsConn.deviceId
+                }
+                err := usersession.DelInfo(uid, conn.wsConn.deviceId)
+                fmt.Println(err)
         }
     }
 }
