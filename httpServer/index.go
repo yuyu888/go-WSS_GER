@@ -28,12 +28,6 @@ func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
         http.SetCookie(w, &c1)
     }
 
-    //message := r.PostFormValue("params")
-    //fmt.Fprintln(w, message)
-    //
-    //result  := msg + message + " is task return"
-    //fmt.Fprintln(w, result)
-
     result  := "hello word"
     fmt.Fprintln(w, result)
 }
@@ -95,8 +89,6 @@ func httpHandlerSendMsg(w http.ResponseWriter, r *http.Request) {
 
         push(message, fmt.Sprintf("%s", serverAddr));
     }
-
-    //data := map[string]int32{"send_count": sendCount};
 }
 
 func push( msg *model.Message, serverAddr string) {
@@ -113,25 +105,11 @@ func push( msg *model.Message, serverAddr string) {
     return;
 }
 
-//func httpHandlerSetRedis(w http.ResponseWriter, r *http.Request) {
-//    query := r.URL.Query()
-//    uid := query.Get("uid")
-//    deviceId := query.Get("deviceid")
-//    fmt.Fprintln(w, "uid：" + uid+" deviceid: " + deviceId)
-//
-//    usersession := model.NewUserSession()
-//    wsInfo := &model.Session{WsServerAddr:"127.0.0.1", WssId:"123567"}
-//    err := usersession.SaveInfo(uid, deviceId, wsInfo)
-//    fmt.Println(err)
-//}
-
-
 
 func Init() {
     fmt.Println("httpServer is run")
     http.HandleFunc("/", httpHandlerIndex)
     http.HandleFunc("/test", httpHandlerTest)
-    //http.HandleFunc("/setredis", httpHandlerSetRedis)
     http.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
     http.HandleFunc("/sendmsg", httpHandlerSendMsg)
     http.ListenAndServe("0.0.0.0:80", nil)
