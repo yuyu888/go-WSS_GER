@@ -1,0 +1,18 @@
+title = "service config"
+
+[base]
+env = "dev"
+logdir = "/tmp/wssgo/"
+
+[etcd]
+server = [
+    "172.18.12.229:2379",
+    "172.18.12.226:2379",
+    "172.18.12.254:2379"
+       ]
+port = "2379"
+
+[redis]
+addr = "172.18.8.205:6384"
+password = ""
+db = 0

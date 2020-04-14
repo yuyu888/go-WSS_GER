@@ -1,0 +1,25 @@
+title = "service config"
+
+[base]
+env = "prod"
+logdir = "/tmp/wssgo/"
+
+[etcd]
+server = [
+    "172.18.12.229:2379",
+    "172.18.12.226:2379",
+    "172.18.12.254:2379"
+       ]
+port = "2379"
+
+[rpc]
+addr = "172.18.71.56:6767"
+port = 50051
+network = "tcp"
+basepath = "/transit_go"
+registername = "transitData"
+
+[redis]
+addr = "172.18.8.205:6384"
+password = ""
+db = 0

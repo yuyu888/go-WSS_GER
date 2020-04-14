@@ -66,7 +66,8 @@ func process(message []byte, wsConn *wsConnection)(error) {
         case "broadcast":
             doSendMsgToWssid(wsReqData.RequestData, &wsRespData, wsConn)
         default:
-            wsConn.wsWrite(1, []byte("request_type: "+wsReqData.RequestType+" 非法"))
+            resp := `{"errcode":4006, "wssid":"`+wsConn.wssid+`","request_id":"","response_data":" request_type is not  supported","action":"error"}`
+            wsConn.wsWrite(1, []byte(resp))
     }
     return nil
 }
@@ -184,7 +185,7 @@ func doSendMsgToWssid(reqParams map[string]interface{}, wsRespData *ResponseData
     if(!ok){
         return errors.New("Lack of message")
     }
-    WsManager.doSendMsgToWssid(wssid, []byte(message))
+    WsManager.DoSendMsgToWssid(wssid, []byte(message))
     wsRespData.ResponseData = "信息：" + message+" 发送给 " + wssid
     display(wsRespData, wsConn)
     return nil

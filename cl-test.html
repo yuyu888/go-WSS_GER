@@ -22,7 +22,7 @@
                 if (ws) {
                     return false;
                 }
-                ws = new WebSocket("ws://localhost:80/ws?device_id=bbb");
+                ws = new WebSocket("ws://localhost/ws?device_id=aaa");
                 ws.onopen = function(evt) {
                     print("OPEN");
                 }
@@ -66,13 +66,13 @@
 </head>
 <body>
 <table>
-    <tr><td valign="top" width="50%">
+    <tr><td valign="top" width="30%">
         <p>Click "Open" to create a connection to the server,
             "Send" to send a message to the server and "Close" to close the connection.
             You can change the message and send multiple times.
         </p>
             <form>
-                <textarea rows="10" id="msg" style="outline:none;" cols="100">{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+                <textarea rows="10" id="msg" style="outline:none;" cols="60">{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
                 <br/>
                 <button id="open">Open</button>
                 <button id="close">Close</button>
@@ -80,7 +80,7 @@
 
                 <button id="clear">clear</button>
             </form>
-    </td><td valign="top" width="50%">
+    </td><td valign="top" width="70%">
         <div id="output"></div>
     </td></tr></table>
 </body>
