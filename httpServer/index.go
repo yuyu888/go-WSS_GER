@@ -84,34 +84,34 @@ func httpHandlerSendMsg(w http.ResponseWriter, r *http.Request) {
     }
     //var sendCount int32 = 0
     for device_id, sessionInfo := range userinfo {
-        serverAddr, err := usersession.GetWsServer(sessionInfo);
+        serverAddr, wssid, err := usersession.GetWsServer(sessionInfo);
         if err != nil || len(serverAddr) == 0 {
             continue;
         }
         fmt.Fprintln(w,fmt.Sprintf("%s", serverAddr))
         fmt.Fprintln(w, device_id)
         fmt.Fprintln(w, sessionInfo)
+        message := &model.Message{Content:msg, Wssid:fmt.Sprintf("%s", wssid)}
 
-
-
-        //go push(&wg, &model.Message{Uid:toUid, DeviceId:deviceId, Body:msg}, string(serverAddr), &sendCount);
+        push(message, fmt.Sprintf("%s", serverAddr));
     }
 
     //data := map[string]int32{"send_count": sendCount};
 }
 
-//func push( msg *model.Message, serverAddr string) {
-//    cl, ok := GetRpcClient(serverAddr, 1);
-//    if !ok {
-//        return ;
-//    }
-//    reply := new(model.Reply);
-//    RpcCall(cl, msg, reply);
-//    if reply.Status > 0 {
-//        return ;
-//    }
-//    return;
-//}
+func push( msg *model.Message, serverAddr string) {
+    cl, ok := GetRpcClient(serverAddr, 2);
+    if !ok {
+        fmt.Println("rpcclient is wrong")
+        return ;
+    }
+    reply := new(model.Reply);
+    RpcCall(cl, msg, reply);
+    if reply.Status > 0 {
+        return ;
+    }
+    return;
+}
 
 //func httpHandlerSetRedis(w http.ResponseWriter, r *http.Request) {
 //    query := r.URL.Query()

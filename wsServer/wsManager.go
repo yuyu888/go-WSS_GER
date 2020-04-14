@@ -47,14 +47,7 @@ func (WsManager *ClientManager) ProcLoop() {
                 }
                 wsInfo := &model.Session{WsServerAddr:config.ServiceConf.LocalIp, WssId:conn.wsConn.wssid}
                 err := usersession.SaveInfo(uid, conn.wsConn.deviceId, wsInfo)
-                fmt.Println("================")
-
-                fmt.Println(uid)
-                fmt.Println(conn.wsConn.deviceId)
-                fmt.Println(wsInfo)
                 fmt.Println(err)
-                fmt.Println("================")
-
         //如果连接断开了
             case conn := <-WsManager.unregister:
                 WsClientPools.remove(conn.id)
@@ -63,7 +56,6 @@ func (WsManager *ClientManager) ProcLoop() {
 }
 
 func (WsManager *ClientManager) doRegister(conn *wsConnection) {
-    fmt.Println("111111")
     //每一次连接都会新开一个client，client.id通过uuid生成保证每次都是不同的
     clientId := conn.wssid
     client := &Client{id: clientId, wsConn: conn}

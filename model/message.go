@@ -1,9 +1,8 @@
 package model
 
 type Message struct {
-	Body string
-	DeviceId string
-	Uid string
+	Content string
+	Wssid string
 }
 
 type Reply struct {

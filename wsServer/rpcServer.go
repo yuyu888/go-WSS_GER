@@ -9,8 +9,7 @@ import (
     "wssgo/config"
     //"encoding/json"
     "wssgo/model"
-    "wssgo/libs"
-
+    //"fmt"
 )
 
 type TransitData struct{
@@ -18,7 +17,8 @@ type TransitData struct{
 }
 
 func (t *TransitData) Dispatch (ctx context.Context, args *model.Message,  reply *model.Reply) error {
-    libs.Logger.Infof("rpc receive param:%v, send ret:%v", args, reply)
+    manager := &ClientManager{};
+    manager.DoSendMsgToWssid(args.Wssid, []byte(args.Content))
     return nil
 }
 

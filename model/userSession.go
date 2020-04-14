@@ -44,6 +44,7 @@ func (u UserSession)GetInfo(uid string, deviceid string) (userInfo map[string]st
         userInfo[deviceid] = info;
         return userInfo, err;
     }
+
     if len(uid) > 0 {
         userInfo, err = u.redisCli.HGetAll(cachePrefix + uid);
         if err != nil {
@@ -61,14 +62,14 @@ func (u UserSession)GetInfo(uid string, deviceid string) (userInfo map[string]st
     return userInfo, nil;
 }
 
-func (u UserSession)GetWsServer(session string) ([]byte, error) {
+func (u UserSession)GetWsServer(session string) ([]byte, []byte, error) {
     userSession := Session{};
     err := json.Unmarshal([]byte(session), &userSession);
     if err != nil {
         libs.Logger.Errorf("session unmarshal error!", session);
-        return []byte(""), err;
+        return []byte(""), []byte(""), err;
     }
-    return []byte(userSession.WsServerAddr), nil;
+    return []byte(userSession.WsServerAddr), []byte(userSession.WssId), nil;
 }
 
 func (u UserSession)SaveInfo(uid string, deviceid string, SessionData *Session) error {
