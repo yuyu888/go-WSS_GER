@@ -21,7 +21,7 @@ func main() {
 		log.Fatal("get local ip error:" + err.Error())
 	}
 	config.ServiceConf.LocalIp = localIp
-	config.ServiceConf.RpcConf.Addr = localIp + ":" + config.ServiceConf.RpcConf.Port
+	config.ServiceConf.RpcConf.Addr = localIp
 	go wsServer.InitRpcServer()
 	wsServer.Init()
 	httpServer.Init()

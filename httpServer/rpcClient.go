@@ -3,6 +3,7 @@ package httpServer
 import (
 	"context"
 	"github.com/smallnest/rpcx/client"
+	"net"
 	"strings"
 	"time"
 	"wssgo/config"
@@ -42,7 +43,10 @@ func GetRpcClient(rpcServerAddr string, retry int) (client.XClient, bool) {
 	if rpcClientList == nil {
 		InitRpcClient()
 	}
-	addr := rpcServerAddr + ":" + config.ServiceConf.RpcConf.Port
+	addr := rpcServerAddr
+	if _, _, err := net.SplitHostPort(rpcServerAddr); err != nil {
+		addr = net.JoinHostPort(rpcServerAddr, config.ServiceConf.RpcConf.Port)
+	}
 	for i := 0; i <= retry; i++ {
 		if cl, ok := rpcClientList[addr]; ok && cl != nil {
 			return cl, true

@@ -1,10 +1,13 @@
 title = "service config"
 
 [base]
+# 运行环境标识（仅用于配置与日志区分）
 env = "dev"
+# 日志目录
 logdir = "/tmp/wssgo/"
 
 [etcd]
+# etcd 服务地址列表
 server = [
     "172.18.12.229:2379",
     "172.18.12.226:2379",
@@ -12,22 +15,45 @@ server = [
        ]
 port = "2379"
 
+[rpc]
+# rpc 服务注册/监听配置（开发环境建议填写测试地址）
+addr = "127.0.0.1"
+# rpc 端口（addr 只填写 IP/主机名）
+port = 50051
+network = "tcp"
+basepath = "/transit_go"
+registername = "transitData"
+
 [redis]
+# redis 连接信息
 addr = "172.18.8.205:6384"
 password = ""
 db = 0
 
 [http]
+# HTTP 服务监听地址
 addr = "0.0.0.0:80"
+# 读取请求超时（秒）
 read_timeout_sec = 5
+# 写响应超时（秒）
 write_timeout_sec = 30
+# 空闲连接超时（秒）
 idle_timeout_sec = 60
+# 单次请求体大小上限（字节），1MB = 1048576
 max_body_bytes = 1048576
 
 [http.ratelimit]
+# 是否启用限流逻辑
 enabled = false
+# 限流模式：
+# dry_run = 命中仅记录日志，不拦截请求（推荐先用）
+# enforce = 命中后直接返回 429
 mode = "dry_run"
+# 限流策略（当前仅支持 fixed_window）
 strategy = "fixed_window"
+# 限流窗口大小（秒）
 window_seconds = 1
+# 每个 key 在窗口内允许的最大请求数
 max_requests = 30
+# 限流维度（当前支持 ip）
 key_by = "ip"
