@@ -11,4 +11,5 @@ require (
 	github.com/smallnest/rpcx v0.0.0-20191202025149-2fd1f4f7e90c
 	github.com/spf13/viper v1.6.2
 	go.uber.org/zap v1.12.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

@@ -23,3 +23,18 @@ registername = "transitData"
 addr = "172.18.8.205:6384"
 password = ""
 db = 0
+
+[http]
+addr = "0.0.0.0:80"
+read_timeout_sec = 5
+write_timeout_sec = 30
+idle_timeout_sec = 60
+max_body_bytes = 1048576
+
+[http.ratelimit]
+enabled = true
+mode = "dry_run"
+strategy = "fixed_window"
+window_seconds = 1
+max_requests = 30
+key_by = "ip"
