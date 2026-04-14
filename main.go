@@ -16,12 +16,12 @@ var (
 func main() {
 	flag.Parse()
 	config.InitServiceConfig(*Env)
+	libs.InitLogger("wssgo.log", "wssgo", "info")
 	localIp, err := libs.GetLocalIp()
 	if err != nil {
 		log.Fatal("get local ip error:" + err.Error())
 	}
 	config.ServiceConf.LocalIp = localIp
-	config.ServiceConf.RpcConf.Addr = localIp
 	go wsServer.InitRpcServer()
 	wsServer.Init()
 	httpServer.Init()

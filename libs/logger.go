@@ -10,7 +10,7 @@ import (
 )
 const (
 	ENV_DEV = "dev"
-	ENV_PRO = "pro"
+	ENV_PRO = "prod"
 )
 var (
 	Logger *zap.SugaredLogger

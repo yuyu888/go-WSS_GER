@@ -20,7 +20,7 @@ func GetLocalIp() (string, error) {
             }
         }
 	}
-	return "", errors.New("get local ip error!")
+	return "", errors.New("get local ip error")
 }
 
 func MapInterfaceToMapString(mapInterface map[string]interface{})  map[string]string {

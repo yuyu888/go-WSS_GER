@@ -1,114 +1,112 @@
 package curl
 
 import (
-    "net"
-    "net/http"
-    "time"
-    "strings"
-    "fmt"
+	"net"
+	"net/http"
+	"strings"
+	"time"
 )
 
-// Request构造类
+// 全局共享 Transport，复用 TCP 连接
+var sharedTransport = &http.Transport{
+	DialContext: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   10,
+	IdleConnTimeout:       90 * time.Second,
+	ResponseHeaderTimeout: 30 * time.Second,
+}
+
+// Request 构造类
 type Request struct {
-    Method          string
-    Url             string
-    dialTimeout     time.Duration
-    responseTimeOut time.Duration
-    Headers         map[string]string
-    PostData        string
+	Method          string
+	Url             string
+	dialTimeout     time.Duration
+	responseTimeOut time.Duration
+	Headers         map[string]string
+	PostData        string
 }
 
-// 创建一个Request实例
-func  NewRequest() *Request {
-    r := &Request{}
-    r.dialTimeout = 5
-    r.responseTimeOut = 5
-    return r
+// 创建一个 Request 实例
+func NewRequest() *Request {
+	r := &Request{}
+	r.dialTimeout = 5 * time.Second
+	r.responseTimeOut = 5 * time.Second
+	return r
 }
 
-//SetDialTimeOut
-func (this *Request) SetDialTimeOut(TimeOutSecond int) *Request{
-    this.dialTimeout = time.Duration(TimeOutSecond)
-    return this
+// SetDialTimeOut 单位：秒
+func (this *Request) SetDialTimeOut(TimeOutSecond int) *Request {
+	this.dialTimeout = time.Duration(TimeOutSecond) * time.Second
+	return this
 }
 
-//SetResponseTimeOut
-func (this *Request) SetResponseTimeOut(TimeOutSecond int) *Request{
-    this.responseTimeOut = time.Duration(TimeOutSecond)
-    return this
+// SetResponseTimeOut 单位：秒
+func (this *Request) SetResponseTimeOut(TimeOutSecond int) *Request {
+	this.responseTimeOut = time.Duration(TimeOutSecond) * time.Second
+	return this
 }
 
-// 设置请求方法
+// SetMethod 设置请求方法
 func (this *Request) SetMethod(method string) *Request {
-    this.Method = method
-    return this
+	this.Method = method
+	return this
 }
 
-// 设置请求地址
+// SetUrl 设置请求地址
 func (this *Request) SetUrl(url string) *Request {
-    this.Url = url
-    return this
+	this.Url = url
+	return this
 }
 
-// 设置请求头
+// SetHeaders 设置请求头
 func (this *Request) SetHeaders(headers map[string]string) *Request {
-    this.Headers = headers
-    return this
+	this.Headers = headers
+	return this
 }
 
-// 设置请求头
+// SetPostData 设置 POST 数据
 func (this *Request) SetPostData(postData string) *Request {
-    this.PostData = postData
-    return this
+	this.PostData = postData
+	return this
 }
 
-func (this *Request) Send() (*Response, error){
+func (this *Request) Send() (*Response, error) {
+	// 使用全局共享 Transport，每次请求只调整超时
+	transport := sharedTransport.Clone()
+	transport.ResponseHeaderTimeout = this.responseTimeOut
 
-    // 初始化Response对象
-    response := NewResponse()
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   this.dialTimeout + this.responseTimeOut,
+	}
 
-    client := &http.Client{
-        Transport: &http.Transport{
-            Dial: func(netw, addr string) (net.Conn, error) {
-                conn, err := net.DialTimeout(netw, addr, time.Second*this.dialTimeout)
-                if err != nil {
-                    return nil, err
-                }
-                conn.SetDeadline(time.Now().Add(time.Second * this.dialTimeout))
-                return conn, nil
-            },
-            ResponseHeaderTimeout: time.Second * this.responseTimeOut,
-        },
-    }
+	req, err := http.NewRequest(this.Method, this.Url, strings.NewReader(this.PostData))
+	if err != nil {
+		return nil, err
+	}
 
-    req, err := http.NewRequest(this.Method, this.Url, strings.NewReader(this.PostData))
-    if err != nil {
-        return nil, err
-    }
+	if this.Method == "POST" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 
-    if this.Method == "POST" {
-        req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-    }
+	for k, v := range this.Headers {
+		req.Header.Set(k, v)
+	}
 
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 
-    for k, v := range this.Headers {
-        req.Header.Set(k, v)
-    }
+	response := NewResponse()
+	response.Raw = resp
+	defer response.Raw.Body.Close()
 
+	response.parseHeaders()
+	response.parseBody()
 
-    if resp, err := client.Do(req); err != nil {
-        fmt.Println(err)
-
-        return nil, err
-    } else {
-        response.Raw = resp
-    }
-
-    defer response.Raw.Body.Close()
-
-    response.parseHeaders()
-    response.parseBody()
-
-    return response, nil
+	return response, nil
 }
-

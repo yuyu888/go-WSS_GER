@@ -6,33 +6,25 @@ env = "dev"
 # 日志目录
 logdir = "/tmp/wssgo/"
 
-[etcd]
-# etcd 服务地址列表
-server = [
-    "172.18.12.229:2379",
-    "172.18.12.226:2379",
-    "172.18.12.254:2379"
-       ]
-port = "2379"
-
 [rpc]
-# rpc 服务注册/监听配置（开发环境建议填写测试地址）
-addr = "127.0.0.1"
-# rpc 端口（addr 只填写 IP/主机名）
+# rpc 监听端口
 port = 50051
 network = "tcp"
-basepath = "/transit_go"
 registername = "transitData"
 
 [redis]
-# redis 连接信息
-addr = "172.18.8.205:6384"
-password = ""
+# 模式：standalone（单机）或 sentinel（哨兵）
+mode = "sentinel"
+# 哨兵节点地址列表
+sentinel_addrs = ["10.130.142.41:26379", "10.130.142.42:26379", "10.130.142.43:26379"]
+# 主节点名称
+master_name = "mymaster"
+password = "my_redis"
 db = 0
 
 [http]
 # HTTP 服务监听地址
-addr = "0.0.0.0:80"
+addr = "0.0.0.0:8189"
 # 读取请求超时（秒）
 read_timeout_sec = 5
 # 写响应超时（秒）
@@ -41,6 +33,14 @@ write_timeout_sec = 30
 idle_timeout_sec = 60
 # 单次请求体大小上限（字节），1MB = 1048576
 max_body_bytes = 1048576
+
+[ws]
+# ws 代理请求允许转发的 URL 白名单（精确匹配 scheme+host+path）
+allowed_urls = [
+    "http://localhost/test",
+]
+# WebSocket 允许的 Origin 白名单（精确匹配含协议和端口，为空则允许所有来源）
+allowed_origins = []
 
 [http.ratelimit]
 # 是否启用限流逻辑

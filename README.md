@@ -1,52 +1,84 @@
 # go-WSS_GER
-一个go+etcd+rpcx 实现的websocket的服务
 
-#### 安装
-go mod init wssgo
+一个基于 Go + rpcx 实现的分布式 WebSocket 网关服务。
 
-go run main.go
+## 功能简介
 
-### 测试数据
-{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}
+- 浏览器通过 WebSocket 长连接接入，服务端为每个连接分配唯一 `wssid`
+- 支持 `req&resp` 模式：客户端通过 WS 发起 HTTP 代理请求，服务端转发并将结果推回
+- 支持 `broadcast` 模式：向本节点其他连接推送消息
+- 支持跨节点推送：通过 Redis 查找用户所在节点，RPC 转发消息
+- 内置 HTTP 限流（固定窗口，支持 `dry_run` / `enforce` 两种模式）
+- 支持 WebSocket Origin 白名单和代理 URL 白名单
 
-### HTTP防护配置（可配置限流）
+## 外部依赖
 
-项目支持在 `config/config_*.toml` 里配置 HTTP 基础防护与“可灰度限流”策略：
+只需要 **Redis**，支持单机和哨兵模式。
+
+## 快速启动
+
+```bash
+go mod tidy
+go run main.go -env=dev
+```
+
+详细配置和测试说明见 [STARTUP_TEST_GUIDE.md](./STARTUP_TEST_GUIDE.md)。
+
+## 测试数据
+
+WebSocket 消息示例（`req&resp` 模式）：
+
+```json
+{
+  "wssid": "16b3d4db-4586-4002-8cc8-d5fd0cc877f3",
+  "request_id": "d4f50517-0005-49f1-bd18-85ab24cfe701",
+  "request_data": {
+    "http_method": "POST",
+    "request_url": "http://localhost/test?id=11111",
+    "post_data": "msg=ddddd&ww=eee",
+    "headers": {"test": "www"}
+  },
+  "request_type": "req&resp",
+  "action": "user.showInfo"
+}
+```
+
+## HTTP 防护配置（限流）
+
+在 `config/config_*.toml` 里配置：
 
 ```toml
-[http]
-addr = "0.0.0.0:80"
-read_timeout_sec = 5
-write_timeout_sec = 30
-idle_timeout_sec = 60
-max_body_bytes = 1048576
-
 [http.ratelimit]
 enabled = true
-mode = "dry_run"
+mode = "dry_run"       # dry_run=仅记录，enforce=真实拦截返回 429
 strategy = "fixed_window"
 window_seconds = 1
 max_requests = 30
 key_by = "ip"
 ```
 
-参数说明：
-
-- `http.max_body_bytes`: 单次请求体大小上限（字节），超限会被 HTTP 层拒绝。
-- `http.ratelimit.enabled`: 限流总开关。
-- `http.ratelimit.mode`:
-  - `dry_run`: 只记录命中日志，不真正拦截（推荐先用这个模式观察）。
-  - `enforce`: 命中后返回 `429` 和业务码 `4290`。
-- `http.ratelimit.strategy`: 目前支持 `fixed_window`（固定时间窗口计数）。
-- `http.ratelimit.window_seconds`: 窗口大小（秒）。
-- `http.ratelimit.max_requests`: 每个 key 在窗口内可通过的最大请求数。
-- `http.ratelimit.key_by`: 目前支持 `ip`。
-
 建议上线步骤：
+1. 先开 `enabled=true + mode=dry_run` 观察日志是否有误伤
+2. 根据日志调整 `window_seconds` 与 `max_requests`
+3. 再切换到 `mode=enforce` 正式生效
 
-1. 先开 `enabled=true + mode=dry_run` 观察日志是否有误伤。
-2. 根据日志调整 `window_seconds` 与 `max_requests`。
-3. 再切换到 `mode=enforce` 正式生效。
+## Redis 配置
 
-### 感言
-当初做这个项目的时候，go基本零基础；也是借鉴了一些网上的架构思路觉得不错，就勇敢的挑战了一下；用现在的眼光看当时的实现， 或有种不忍直视的感觉，很多实现好幼幼，不过设计思想还是严格的实现了，心理也暗自骄傲，后期的大量项目未必有这个项目架构设计，挑战性也没这个大（干的时候也只有个方向，什么基础都没有，一点成竹在胸的感觉都没有，全都要探索);把这个项目做完，收获也是丰厚的，对于go语言的感觉豁然开朗，算是完成了入门，什么事情都是要多练，敢干，才能更好的领悟；
+**单机模式：**
+```toml
+[redis]
+mode = "standalone"
+addr = "127.0.0.1:6379"
+password = ""
+db = 0
+```
+
+**哨兵模式：**
+```toml
+[redis]
+mode = "sentinel"
+sentinel_addrs = ["10.x.x.1:26379", "10.x.x.2:26379", "10.x.x.3:26379"]
+master_name = "mymaster"
+password = "your_password"
+db = 0
+```

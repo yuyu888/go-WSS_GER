@@ -10,35 +10,39 @@ var (
 )
 
 type ServiceConfig struct {
-	EtcdConf  EtcdConfig  `mapstructure:"etcd"`
 	RedisConf RedisConfig `mapstructure:"redis"`
-	//TransitConf TransitConfig `mapstructure:"transit"`
-	RpcConf  RpcConfig  `mapstructure:"rpc"`
-	HttpConf HttpConfig `mapstructure:"http"`
-	LocalIp  string
-	BaseConf BaseConfig `mapstructure:"base"`
+	RpcConf   RpcConfig   `mapstructure:"rpc"`
+	HttpConf  HttpConfig  `mapstructure:"http"`
+	WsConf    WsConfig    `mapstructure:"ws"`
+	LocalIp   string
+	BaseConf  BaseConfig `mapstructure:"base"`
 }
 
-type EtcdConfig struct {
-	ServerAddr []string `mapstructure:"server"`
-	Port       string   `mapstructure:"port"`
+type WsConfig struct {
+	// URL 白名单，ws 代理请求只允许转发到这些地址（精确匹配 scheme+host+path）
+	AllowedUrls []string `mapstructure:"allowed_urls"`
+	// Origin 白名单，为空则允许所有来源（精确匹配，含协议和端口）
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
 type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	// 模式：standalone（单机）或 sentinel（哨兵），默认 standalone
+	Mode string `mapstructure:"mode"`
+	// 单机模式：Redis 地址
+	Addr string `mapstructure:"addr"`
+	// 哨兵模式：哨兵节点地址列表
+	SentinelAddrs []string `mapstructure:"sentinel_addrs"`
+	// 哨兵模式：主节点名称
+	MasterName string `mapstructure:"master_name"`
+	Password   string `mapstructure:"password"`
+	DB         int    `mapstructure:"db"`
 }
 
-//	type TransitConfig struct {
-//	   Addr string `mapstructure:"addr"`
-//	}
 type RpcConfig struct {
-	Addr         string `mapstructure:"addr"`
+	// RPC 监听端口
 	Port         string `mapstructure:"port"`
 	NetWork      string `mapstructure:"network"`
 	RegisterName string `mapstructure:"registername"`
-	BasePath     string `mapstructure:"basepath"`
 }
 
 type BaseConfig struct {
@@ -111,7 +115,6 @@ func InitServiceConfig(env string) *ServiceConfig {
 	if ServiceConf.HttpConf.RateLimit.KeyBy == "" {
 		ServiceConf.HttpConf.RateLimit.KeyBy = "ip"
 	}
-	//ServiceConf.RpcConf.Addr = localIp + ":" + ServiceConf.RpcConf.Port;
 	log.Printf("config %v\n", ServiceConf)
 	return ServiceConf
 }

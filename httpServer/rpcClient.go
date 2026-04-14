@@ -2,63 +2,65 @@ package httpServer
 
 import (
 	"context"
+	"fmt"
 	"github.com/smallnest/rpcx/client"
 	"net"
-	"strings"
+	"sync"
 	"time"
 	"wssgo/config"
 	"wssgo/libs"
 	"wssgo/model"
-	// "errors"
-	//"fmt"
 )
 
-var (
-	rpcClientList map[string]client.XClient
-)
+// rpcClientCache 按 ip:port 缓存已建立的 RPC 客户端
+var rpcClientCache sync.Map
 
-// 初始化rpc服务
-func InitRpcClient() {
-	d := client.NewEtcdV3Discovery(config.ServiceConf.RpcConf.BasePath, config.ServiceConf.RpcConf.RegisterName, config.ServiceConf.EtcdConf.ServerAddr, nil)
-	rpcClientList = make(map[string]client.XClient, len(d.GetServices()))
+// GetRpcClient 按目标地址获取 RPC 客户端，不存在时自动创建并缓存
+func GetRpcClient(rpcServerAddr string) (client.XClient, bool) {
+	addr := rpcServerAddr
+	if _, _, err := net.SplitHostPort(rpcServerAddr); err != nil {
+		// 只有 IP，没有端口，自动拼上配置的 RPC 端口
+		addr = net.JoinHostPort(rpcServerAddr, config.ServiceConf.RpcConf.Port)
+	}
+
+	// 先查缓存
+	if v, ok := rpcClientCache.Load(addr); ok {
+		return v.(client.XClient), true
+	}
+
+	// 未命中，新建连接
+	cl, err := newRpcClient(addr)
+	if err != nil {
+		fmt.Printf("create rpc client to %s failed: %v\n", addr, err)
+		return nil, false
+	}
+
+	// 存入缓存，若并发时已有其他 goroutine 存入则使用已有的
+	actual, _ := rpcClientCache.LoadOrStore(addr, cl)
+	return actual.(client.XClient), true
+}
+
+// newRpcClient 创建到指定地址的点对点 RPC 客户端
+func newRpcClient(addr string) (client.XClient, error) {
+	key := fmt.Sprintf("%s@%s", config.ServiceConf.RpcConf.NetWork, addr)
+	d := client.NewPeer2PeerDiscovery(key, "")
 	option := client.DefaultOption
-	option.Retries = 10
+	option.Retries = 3
+	option.ConnectTimeout = 5 * time.Second
 	option.GenBreaker = func() client.Breaker {
 		return client.NewConsecCircuitBreaker(5, 30*time.Second)
 	}
-	for _, rpcConf := range d.GetServices() {
-		d := client.NewPeer2PeerDiscovery(rpcConf.Key, "")
-		index := strings.Index(rpcConf.Key, "@")
-
-		serverIp := []byte(rpcConf.Key)[index+1:]
-		rpcClientList[string(serverIp)] = client.NewXClient(config.ServiceConf.RpcConf.RegisterName, client.Failtry, client.RandomSelect, d, option)
-	}
-	//js, _ := json.Marshal(rpcClientList);
-	//fmt.Println(js)
-	return
+	cl := client.NewXClient(
+		config.ServiceConf.RpcConf.RegisterName,
+		client.Failtry,
+		client.RandomSelect,
+		d,
+		option,
+	)
+	return cl, nil
 }
 
-// get rpc client
-func GetRpcClient(rpcServerAddr string, retry int) (client.XClient, bool) {
-	if rpcClientList == nil {
-		InitRpcClient()
-	}
-	addr := rpcServerAddr
-	if _, _, err := net.SplitHostPort(rpcServerAddr); err != nil {
-		addr = net.JoinHostPort(rpcServerAddr, config.ServiceConf.RpcConf.Port)
-	}
-	for i := 0; i <= retry; i++ {
-		if cl, ok := rpcClientList[addr]; ok && cl != nil {
-			return cl, true
-		}
-		if i < retry {
-			InitRpcClient()
-		}
-	}
-	return nil, false
-}
-
-// rpc 调用
+// RpcCall 发起 RPC 调用
 func RpcCall(rpcClient client.XClient, msg *model.Message, reply *model.Reply) {
 	reply.Status = 0
 	defer func() {

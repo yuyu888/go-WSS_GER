@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 	"wssgo/libs"
-	//"fmt"
 )
 
 const (
@@ -27,9 +26,8 @@ type Session struct {
 
 func NewUserSession() *UserSession {
 	u := &UserSession{}
-	redisConf := libs.GetDefaultRedisConf()
-	u.redisCli = libs.NewRedis(redisConf)
-	u.redisCli.Connect()
+	// 复用全局单例，不再每次新建连接池
+	u.redisCli = libs.DefaultRedis()
 	return u
 }
 
@@ -46,8 +44,6 @@ func (u UserSession) GetInfo(uid string, deviceid string) (userInfo map[string]s
 
 	if len(uid) > 0 {
 		userInfo, err = u.redisCli.HGetAll(cachePrefix + uid)
-		if err != nil {
-		}
 		return userInfo, err
 	}
 	if len(deviceid) > 0 {

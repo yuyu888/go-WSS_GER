@@ -2,86 +2,171 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <title>WebSocket 测试</title>
+    <style>
+        body { font-family: sans-serif; padding: 12px; }
+        label { display: inline-block; width: 110px; }
+        textarea { font-family: monospace; font-size: 13px; }
+        #output { font-family: monospace; font-size: 13px; }
+        .send-msg { color: #D50000; }
+        .recv-msg { color: #1565C0; }
+        .sys-msg  { color: #558B2F; }
+    </style>
     <script>
-        window.addEventListener("load", function(evt) {
-            var output = document.getElementById("output");
-            var input = document.getElementById("input");
-            var msg = document.getElementById("msg");
-
+        window.addEventListener("load", function () {
             var ws;
-            var print = function(message) {
+            var currentWssid = "";
+
+            var output = document.getElementById("output");
+            var msgArea = document.getElementById("msg");
+
+            function print(text, cls) {
                 var d = document.createElement("div");
-                d.innerHTML = message;
+                d.className = cls || "";
+                d.innerHTML = text;
                 output.appendChild(d);
-            };
-            var clear = function(){
-                output.innerHTML=''
+                output.scrollTop = output.scrollHeight;
             }
 
-            document.getElementById("open").onclick = function(evt) {
-                if (ws) {
-                    return false;
-                }
-                ws = new WebSocket("ws://localhost/ws?device_id=aaa");
-                ws.onopen = function(evt) {
-                    print("OPEN");
-                }
-                ws.onclose = function(evt) {
-                    print("CLOSE");
+            // 连接建立后，从服务端 wsInit 消息中提取 wssid 并自动替换发送框中的占位符
+            function applyWssid(wssid) {
+                currentWssid = wssid;
+                document.getElementById("wssid-display").textContent = wssid;
+                // 把发送框里所有 __WSSID__ 占位符替换为真实值
+                msgArea.value = msgArea.value.replace(/__WSSID__/g, wssid);
+            }
+
+            document.getElementById("open").onclick = function () {
+                if (ws) return false;
+                var url = document.getElementById("wsurl").value;
+                ws = new WebSocket(url);
+                ws.onopen = function () {
+                    print("▶ 连接已建立", "sys-msg");
+                };
+                ws.onclose = function () {
+                    print("■ 连接已关闭", "sys-msg");
                     ws = null;
-                }
-                ws.onmessage = function(evt) {
-                    print("<br/>")
-                    print("<span style='color:blue'>RESPONSE:</span> " + evt.data);
-                }
-                ws.onerror = function(evt) {
-                    print("ERROR: " + evt.data);
-                }
-                return false;
-            };
-            document.getElementById("send").onclick = function(evt) {
-                if (!ws) {
-                    return false;
-                }
-                print("<br/>")
-                print("<sapn style='color: #D50000'>SEND:</sapn> " + msg.value);
-                ws.send(msg.value);
-                return false;
-            };
-            document.getElementById("close").onclick = function(evt) {
-                if (!ws) {
-                    return false;
-                }
-                ws.close();
-                return false;
-            };
-            document.getElementById("clear").onclick = function(evt) {
-                clear()
+                    currentWssid = "";
+                    document.getElementById("wssid-display").textContent = "（未连接）";
+                };
+                ws.onmessage = function (evt) {
+                    print("← " + evt.data, "recv-msg");
+                    // 自动提取 wsInit 下发的 wssid
+                    try {
+                        var data = JSON.parse(evt.data);
+                        if (data.action === "wsInit" && data.wssid) {
+                            applyWssid(data.wssid);
+                            print("✓ wssid 已自动填入：" + data.wssid, "sys-msg");
+                        }
+                    } catch (e) {}
+                };
+                ws.onerror = function (evt) {
+                    print("✗ 错误：" + evt.data, "sys-msg");
+                };
                 return false;
             };
 
+            document.getElementById("send").onclick = function () {
+                if (!ws) { print("✗ 请先建立连接", "sys-msg"); return false; }
+                var text = msgArea.value;
+                print("→ " + text, "send-msg");
+                ws.send(text);
+                return false;
+            };
+
+            document.getElementById("close").onclick = function () {
+                if (ws) ws.close();
+                return false;
+            };
+
+            document.getElementById("clear").onclick = function () {
+                output.innerHTML = "";
+                return false;
+            };
+
+            // 切换预设用例
+            document.getElementById("preset").onchange = function () {
+                var wssid = currentWssid || "__WSSID__";
+                var presets = {
+                    "req_resp": JSON.stringify({
+                        wssid: wssid,
+                        request_id: newUUID(),
+                        request_type: "req&resp",
+                        action: "user.showInfo",
+                        request_data: {
+                            http_method: "POST",
+                            request_url: "http://localhost:8189/test?id=11111",
+                            post_data: "msg=ddddd&ww=eee",
+                            headers: { "test": "www" }
+                        }
+                    }, null, 2),
+                    "broadcast": JSON.stringify({
+                        wssid: wssid,
+                        request_id: newUUID(),
+                        request_type: "broadcast",
+                        action: "push.msg",
+                        request_data: {
+                            wssid: wssid,
+                            message: "hello from broadcast"
+                        }
+                    }, null, 2)
+                };
+                if (presets[this.value]) {
+                    msgArea.value = presets[this.value];
+                }
+            };
+
+            function newUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                    var r = Math.random() * 16 | 0;
+                    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                });
+            }
         });
-
     </script>
 </head>
 <body>
-<table>
-    <tr><td valign="top" width="30%">
-        <p>Click "Open" to create a connection to the server,
-            "Send" to send a message to the server and "Close" to close the connection.
-            You can change the message and send multiple times.
-        </p>
-            <form>
-                <textarea rows="10" id="msg" style="outline:none;" cols="60">{"wssid":"16b3d4db-4586-4002-8cc8-d5fd0cc877f3","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http:\/\/localhost\/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
-                <br/>
+<h3>WebSocket 测试客户端</h3>
+<table width="100%">
+    <tr>
+        <td valign="top" width="35%">
+            <div>
+                <label>服务器地址：</label>
+                <input id="wsurl" type="text" style="width:320px;"
+                       value="ws://localhost:8189/ws?device_id=aaa"/>
+            </div>
+            <div style="margin-top:6px;">
+                <label>当前 wssid：</label>
+                <span id="wssid-display" style="color:#888;">（未连接）</span>
+            </div>
+            <div style="margin-top:10px;">
                 <button id="open">Open</button>
                 <button id="close">Close</button>
-            <button id="send">Send</button>
+                <button id="clear">Clear</button>
+            </div>
 
-                <button id="clear">clear</button>
-            </form>
-    </td><td valign="top" width="70%">
-        <div id="output"></div>
-    </td></tr></table>
+            <div style="margin-top:14px;">
+                <label>预设用例：</label>
+                <select id="preset">
+                    <option value="">-- 选择 --</option>
+                    <option value="req_resp">req&amp;resp（HTTP 代理）</option>
+                    <option value="broadcast">broadcast（推送消息）</option>
+                </select>
+            </div>
+
+            <div style="margin-top:8px;">
+                <textarea id="msg" rows="18" cols="55">{"wssid":"__WSSID__","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http://localhost:8189/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+            </div>
+            <div style="margin-top:6px;">
+                <button id="send">Send</button>
+            </div>
+        </td>
+        <td valign="top" width="65%" style="padding-left:16px;">
+            <div id="output"
+                 style="border:1px solid #ccc; padding:8px; height:520px; overflow-y:auto; background:#fafafa;">
+            </div>
+        </td>
+    </tr>
+</table>
 </body>
 </html>

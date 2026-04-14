@@ -11,6 +11,10 @@ import (
 	"wssgo/config"
 )
 
+func timeoutDuration(sec int) time.Duration {
+	return time.Duration(sec) * time.Second
+}
+
 type responsePayload struct {
 	ErrCode      int    `json:"errcode"`
 	ResponseData string `json:"response_data"`
@@ -29,10 +33,29 @@ type fixedWindowLimiter struct {
 }
 
 func newFixedWindowLimiter(windowSeconds, maxRequests int64) *fixedWindowLimiter {
-	return &fixedWindowLimiter{
+	l := &fixedWindowLimiter{
 		windowSeconds: windowSeconds,
 		maxRequests:   maxRequests,
 		visitors:      make(map[string]*visitorWindow),
+	}
+	// 每分钟清理一次过期窗口条目，防止 map 无限增长
+	go l.cleanLoop()
+	return l
+}
+
+// cleanLoop 定期删除已过期的窗口记录
+func (l *fixedWindowLimiter) cleanLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now().Unix() / l.windowSeconds
+		l.mutex.Lock()
+		for key, v := range l.visitors {
+			if v.windowStart < now {
+				delete(l.visitors, key)
+			}
+		}
+		l.mutex.Unlock()
 	}
 }
 

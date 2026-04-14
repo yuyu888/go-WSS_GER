@@ -1,22 +1,27 @@
 package httpServer
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"time"
 	"wssgo/config"
 	"wssgo/model"
 	"wssgo/wsServer"
-	// "log"
-	//"sync"
-	//"sync/atomic"
 )
 
-func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
+type httpResp struct {
+	ErrCode      int    `json:"errcode"`
+	ResponseData string `json:"response_data"`
+}
 
+func jsonResp(w http.ResponseWriter, errCode int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	body, _ := json.Marshal(&httpResp{ErrCode: errCode, ResponseData: msg})
+	w.Write(body)
+}
+
+func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	//msg := query.Get("msg")
 	uid := query.Get("uid")
 	if uid != "" {
 		c1 := http.Cookie{
@@ -24,22 +29,12 @@ func httpHandlerIndex(w http.ResponseWriter, r *http.Request) {
 			Value:    uid,
 			HttpOnly: true,
 		}
-		// 把cookie写入客户端
 		http.SetCookie(w, &c1)
 	}
-
-	//message := r.PostFormValue("params")
-	//fmt.Fprintln(w, message)
-	//
-	//result  := msg + message + " is task return"
-	//fmt.Fprintln(w, result)
-
-	result := "hello word"
-	fmt.Fprintln(w, result)
+	fmt.Fprintln(w, "hello word")
 }
 
 func httpHandlerTest(w http.ResponseWriter, r *http.Request) {
-	time.Sleep(2 * time.Second)
 	query := r.URL.Query()
 	id := query.Get("id")
 	message := r.PostFormValue("msg")
@@ -62,75 +57,51 @@ func httpHandlerSendMsg(w http.ResponseWriter, r *http.Request) {
 	msg := r.PostFormValue("msg")
 
 	if len(uid) == 0 && len(deviceId) == 0 {
-		resp := `{"errcode":4001, "response_data":"uid, deviceId is empty"}`
-		fmt.Fprintln(w, resp)
+		jsonResp(w, 4001, "uid, deviceId is empty")
 		return
 	}
 	if len(msg) == 0 {
-		resp := `{"errcode":4002, "response_data":"msg is empty"}`
-		fmt.Fprintln(w, resp)
+		jsonResp(w, 4002, "msg is empty")
 		return
 	}
 
 	usersession := model.NewUserSession()
-
 	userinfo, err := usersession.GetInfo(uid, deviceId)
 	if err != nil {
-		resp := `{"errcode":5003, "something is wrong for getuserinfo "}`
-		fmt.Fprintln(w, resp)
+		jsonResp(w, 5003, "get user info failed: "+err.Error())
 		return
-	} else {
-		fmt.Fprintln(w, userinfo)
 	}
-	//var sendCount int32 = 0
+
+	var sendCount int
 	for device_id, sessionInfo := range userinfo {
 		serverAddr, wssid, err := usersession.GetWsServer(sessionInfo)
 		if err != nil || len(serverAddr) == 0 {
 			continue
 		}
-		fmt.Fprintln(w, fmt.Sprintf("%s", serverAddr))
-		fmt.Fprintln(w, device_id)
-		fmt.Fprintln(w, sessionInfo)
+		_ = device_id
 		message := &model.Message{Content: msg, Wssid: fmt.Sprintf("%s", wssid)}
-
 		push(message, fmt.Sprintf("%s", serverAddr))
+		sendCount++
 	}
 
-	//data := map[string]int32{"send_count": sendCount};
+	jsonResp(w, 200, fmt.Sprintf("sent to %d device(s)", sendCount))
 }
 
 func push(msg *model.Message, serverAddr string) {
-	cl, ok := GetRpcClient(serverAddr, 2)
+	cl, ok := GetRpcClient(serverAddr)
 	if !ok {
 		fmt.Println("rpcclient is wrong")
 		return
 	}
 	reply := new(model.Reply)
 	RpcCall(cl, msg, reply)
-	if reply.Status > 0 {
-		return
-	}
-	return
 }
-
-//func httpHandlerSetRedis(w http.ResponseWriter, r *http.Request) {
-//    query := r.URL.Query()
-//    uid := query.Get("uid")
-//    deviceId := query.Get("deviceid")
-//    fmt.Fprintln(w, "uid：" + uid+" deviceid: " + deviceId)
-//
-//    usersession := model.NewUserSession()
-//    wsInfo := &model.Session{WsServerAddr:"127.0.0.1", WssId:"123567"}
-//    err := usersession.SaveInfo(uid, deviceId, wsInfo)
-//    fmt.Println(err)
-//}
 
 func Init() {
 	fmt.Println("httpServer is run")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", httpHandlerIndex)
 	mux.HandleFunc("/test", httpHandlerTest)
-	//http.HandleFunc("/setredis", httpHandlerSetRedis)
 	mux.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
 	mux.HandleFunc("/sendmsg", httpHandlerSendMsg)
 
@@ -141,11 +112,11 @@ func Init() {
 	srv := &http.Server{
 		Addr:         config.ServiceConf.HttpConf.Addr,
 		Handler:      handler,
-		ReadTimeout:  time.Duration(config.ServiceConf.HttpConf.ReadTimeoutSec) * time.Second,
-		WriteTimeout: time.Duration(config.ServiceConf.HttpConf.WriteTimeoutSec) * time.Second,
-		IdleTimeout:  time.Duration(config.ServiceConf.HttpConf.IdleTimeoutSec) * time.Second,
+		ReadTimeout:  timeoutDuration(config.ServiceConf.HttpConf.ReadTimeoutSec),
+		WriteTimeout: timeoutDuration(config.ServiceConf.HttpConf.WriteTimeoutSec),
+		IdleTimeout:  timeoutDuration(config.ServiceConf.HttpConf.IdleTimeoutSec),
 	}
 	if err := srv.ListenAndServe(); err != nil {
-		log.Printf("http server stopped: %v", err)
+		fmt.Printf("http server stopped: %v\n", err)
 	}
 }

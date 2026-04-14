@@ -10,11 +10,19 @@ import (
 	"time"
 )
 
-// http升级websocket协议的配置
+const (
+	// 心跳间隔：100 秒无消息则发送心跳
+	heartbeatInterval = 100 * time.Second
+	// 读超时：超过该时间没有读到任何帧则关闭连接
+	// 设为心跳间隔的 1.5 倍，给客户端足够时间响应
+	readDeadline = 150 * time.Second
+)
+
+// http 升级 websocket 协议的配置
 var wsUpgrader = websocket.Upgrader{
-	// 允许所有CORS跨域请求
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		return isOriginAllowed(origin)
 	},
 }
 
@@ -26,33 +34,31 @@ type wsMessage struct {
 
 // 客户端连接
 type wsConnection struct {
-	wsSocket  *websocket.Conn // 底层websocket
-	inChan    chan *wsMessage // 读队列
-	outChan   chan *wsMessage // 写队列
+	wsSocket  *websocket.Conn // 底层 websocket
+	inChan    chan *wsMessage  // 读队列
+	outChan   chan *wsMessage  // 写队列
 	mutex     sync.Mutex      // 避免重复关闭管道
 	isClosed  bool
 	closeChan chan byte // 关闭通知
-	wssid     string    //ws链接id 连接建立时产生
-	loginUid  string    // 登录用户uid
-	deviceId  string    //设备号
-	isDynamic bool      //是否活跃
+	wssid     string   // ws 链接 id，连接建立时产生
+	loginUid  string   // 登录用户 uid
+	deviceId  string   // 设备号
+	isDynamic bool     // 是否活跃
 }
 
 func (wsConn *wsConnection) wsReadLoop() {
 	defer close(wsConn.inChan)
 	for {
-		// 读一个message
+		// 每次读之前刷新读超时，保证长空闲连接能被检测到
+		_ = wsConn.wsSocket.SetReadDeadline(time.Now().Add(readDeadline))
+
 		msgType, data, err := wsConn.wsSocket.ReadMessage()
 		if err != nil {
 			goto error
 		}
 		wsConn.isDynamic = true
-		req := &wsMessage{
-			msgType,
-			data,
-		}
+		req := &wsMessage{msgType, data}
 
-		// 放入请求队列
 		select {
 		case wsConn.inChan <- req:
 		case <-wsConn.closeChan:
@@ -68,13 +74,11 @@ func (wsConn *wsConnection) wsWriteLoop() {
 	defer close(wsConn.outChan)
 	for {
 		select {
-		// 取一个应答
 		case msg, ok := <-wsConn.outChan:
 			if !ok || msg == nil {
 				goto closed
 			}
 			wsConn.isDynamic = true
-			// 写给websocket
 			if err := wsConn.wsSocket.WriteMessage(msg.messageType, msg.data); err != nil {
 				goto error
 			}
@@ -88,57 +92,60 @@ closed:
 }
 
 func (wsConn *wsConnection) procLoop() {
-	// 启动一个gouroutine发送心跳
+	// 启动心跳 goroutine
 	go func() {
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
 		for {
-			time.Sleep(100 * time.Second)
-			if wsConn.isDynamic == true {
-				wsConn.isDynamic = false
-				continue
-			}
-			heartBeat := `{"errcode":200, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"heartbeat from server","action":"wsHeartBeat"}`
-			if err := wsConn.wsWrite(websocket.TextMessage, []byte(heartBeat)); err != nil {
-				fmt.Println("heartbeat fail")
-				wsConn.wsClose()
-				break
+			select {
+			case <-ticker.C:
+				if wsConn.isDynamic {
+					wsConn.isDynamic = false
+					continue
+				}
+				heartBeat := `{"errcode":200, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"heartbeat from server","action":"wsHeartBeat"}`
+				if err := wsConn.wsWrite(websocket.TextMessage, []byte(heartBeat)); err != nil {
+					fmt.Println("heartbeat fail")
+					wsConn.wsClose()
+					return
+				}
+			case <-wsConn.closeChan:
+				return
 			}
 		}
 	}()
 
-	gch := make(chan bool, 2)
-	var wg = sync.WaitGroup{}
+	// 限制单连接最大并发处理数为 2
+	sem := make(chan struct{}, 2)
+	var wg sync.WaitGroup
+
 	for {
-		wg.Add(1)
-		gch <- true
 		msg, err := wsConn.wsRead()
 		if err != nil {
 			fmt.Println("read fail")
 			break
 		}
-		go doProcess(msg.data, wsConn, gch, &wg)
+		// 在派发 goroutine 之前先 Add，避免 break 时 wg.Wait 看到未完成的计数
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(data []byte) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			doProcess(data, wsConn)
+		}(msg.data)
 	}
-	close(gch)
+
 	wg.Wait()
 }
 
-func doProcess(msg []byte, wsConn *wsConnection, ch chan bool, wg *sync.WaitGroup) {
-	defer wg.Done()
+func doProcess(msg []byte, wsConn *wsConnection) {
 	process(msg, wsConn)
-	//reqerr := process(msg, wsConn)
-	//if(reqerr!=nil){
-	//    err := wsConn.wsWrite(1, []byte(fmt.Sprintf("%s", reqerr)))
-	//    if err != nil {
-	//        fmt.Println("write fail")
-	//    }
-	//}
-	<-ch
 }
 
 func wsHandler(resp http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	deviceId := query.Get("device_id")
 
-	// 应答客户端告知升级连接为websocket
 	wsSocket, err := wsUpgrader.Upgrade(resp, req, nil)
 	if err != nil {
 		return
@@ -151,27 +158,23 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
 		isClosed:  false,
 	}
 	if deviceId == "" {
-		resp := `{"errcode":4001, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"Lack of device_id","action":"error"}`
-		wsConn.wsSocket.WriteMessage(1, []byte(resp))
+		errResp := `{"errcode":4001, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"Lack of device_id","action":"error"}`
+		wsConn.wsSocket.WriteMessage(1, []byte(errResp))
 		wsConn.wsSocket.Close()
 		return
-	} else {
-		wsConn.deviceId = deviceId
 	}
+	wsConn.deviceId = deviceId
+
 	loginUid, err := req.Cookie("uid")
 	if err == nil {
 		wsConn.loginUid = loginUid.Value
 		fmt.Println(loginUid.Value)
-
 	} else {
 		wsConn.loginUid = ""
 	}
 	wsConn.wsInit()
-	// 处理器
 	go wsConn.procLoop()
-	// 读协程
 	go wsConn.wsReadLoop()
-	// 写协程
 	go wsConn.wsWriteLoop()
 }
 
@@ -218,6 +221,7 @@ func (wsConn *wsConnection) wsInit() {
 
 func Init() {
 	fmt.Println("wsServer is run")
+	InitUrlList()
 	go WsManager.ProcLoop()
 	http.HandleFunc("/ws", wsHandler)
 }

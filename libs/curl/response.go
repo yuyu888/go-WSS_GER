@@ -1,9 +1,8 @@
 package curl
 
 import (
-    "io/ioutil"
-    "net/http"
-    "fmt"
+	"io"
+	"net/http"
 )
 
 type Response struct {
@@ -20,26 +19,19 @@ func (this *Response) IsOk() bool {
 	return this.Raw.StatusCode == 200
 }
 
-func (this *Response) parseHeaders() error {
+func (this *Response) parseHeaders() {
 	headers := map[string]string{}
 	for k, v := range this.Raw.Header {
 		headers[k] = v[0]
 	}
 	this.Headers = headers
-	return nil
 }
 
 func (this *Response) parseBody() error {
-    defer func() {
-        if err := recover(); err != nil {
-            fmt.Println(err)
-        }
-    }()
-
-	if body, err := ioutil.ReadAll(this.Raw.Body); err != nil {
-		panic(err)
-	} else {
-		this.Body = string(body)
+	body, err := io.ReadAll(this.Raw.Body)
+	if err != nil {
+		return err
 	}
+	this.Body = string(body)
 	return nil
 }

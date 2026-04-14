@@ -137,13 +137,17 @@ func doRequestBusiness(reqParams map[string]interface{}, wsRespData *ResponseDat
     return  nil
 }
 
-func checkReqParams(reqParams map[string]interface{},  reqData *RequestData)(int, error){
-    HttpMethod, ok := reqParams["http_method"].(string)
-    if(ok){
-        reqData.HttpMethod = HttpMethod
-    }else{
-        return 4101, errors.New("Lack of http_method")
-    }
+func checkReqParams(reqParams map[string]interface{}, reqData *RequestData) (int, error) {
+	HttpMethod, ok := reqParams["http_method"].(string)
+	if !ok {
+		return 4101, errors.New("Lack of http_method")
+	}
+	switch HttpMethod {
+	case "GET", "POST":
+		reqData.HttpMethod = HttpMethod
+	default:
+		return 4101, errors.New("http_method only supports GET or POST")
+	}
 
     RequestUrl, ok := reqParams["request_url"].(string)
     if(ok){

@@ -2,48 +2,27 @@ package wsServer
 
 import (
 	"context"
-	"github.com/rcrowley/go-metrics"
+	"fmt"
 	"github.com/smallnest/rpcx/server"
-	"github.com/smallnest/rpcx/serverplugin"
-	"log"
 	"net"
-	"time"
 	"wssgo/config"
-	//"encoding/json"
 	"wssgo/model"
-	//"fmt"
 )
 
-type TransitData struct {
-}
+type TransitData struct{}
 
 func (t *TransitData) Dispatch(ctx context.Context, args *model.Message, reply *model.Reply) error {
-	manager := &ClientManager{}
-	manager.DoSendMsgToWssid(args.Wssid, []byte(args.Content))
+	WsManager.DoSendMsgToWssid(args.Wssid, []byte(args.Content))
 	return nil
 }
 
 func InitRpcServer() {
-	addr := net.JoinHostPort(config.ServiceConf.RpcConf.Addr, config.ServiceConf.RpcConf.Port)
+	addr := net.JoinHostPort(config.ServiceConf.LocalIp, config.ServiceConf.RpcConf.Port)
 	network := config.ServiceConf.RpcConf.NetWork
 	s := server.NewServer()
-	addRegistryPlugin(s, network, addr)
 	s.RegisterName(config.ServiceConf.RpcConf.RegisterName, new(TransitData), "")
-	s.Serve(network, addr)
-}
-
-func addRegistryPlugin(s *server.Server, network, addr string) {
-	//libs.Logger.Info("rpc server" + network + "add:" + addr + "etcd:" + string(config.ServiceConf.EtcdConf.ServerAddr[0]))
-	r := &serverplugin.EtcdV3RegisterPlugin{
-		ServiceAddress: network + "@" + addr,
-		EtcdServers:    config.ServiceConf.EtcdConf.ServerAddr,
-		BasePath:       config.ServiceConf.RpcConf.BasePath,
-		Metrics:        metrics.NewRegistry(),
-		UpdateInterval: time.Minute,
+	fmt.Printf("rpcServer is run on %s\n", addr)
+	if err := s.Serve(network, addr); err != nil {
+		fmt.Printf("rpcServer stopped: %v\n", err)
 	}
-	err := r.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.Plugins.Add(r)
 }
