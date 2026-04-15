@@ -8,7 +8,9 @@ import (
     "errors"
     "strconv"
     "net/url"
+    "wssgo/config"
     "wssgo/libs"
+    "wssgo/model"
 )
 
 func request(reqParams *RequestData)(string, error) {
@@ -189,7 +191,21 @@ func doSendMsgToWssid(reqParams map[string]interface{}, wsRespData *ResponseData
     if(!ok){
         return errors.New("Lack of message")
     }
-    WsManager.DoSendMsgToWssid(wssid, []byte(message))
+
+    // 优先推送到本节点
+    if _, exists := WsClientPools.get(wssid); exists {
+        WsManager.DoSendMsgToWssid(wssid, []byte(message))
+    } else if CrossNodeSendFunc != nil {
+        // 本节点没有该连接，查 Redis 找目标节点地址，通过 RPC 跨节点转发
+        us := model.NewUserSession()
+        serverAddr, err := us.GetWssidServer(wssid)
+        if err == nil && serverAddr != "" && serverAddr != config.ServiceConf.LocalIp {
+            CrossNodeSendFunc(serverAddr, wssid, message)
+        } else {
+            fmt.Printf("broadcast: wssid %s not found on any node\n", wssid)
+        }
+    }
+
     wsRespData.ResponseData = "信息：" + message+" 发送给 " + wssid
     display(wsRespData, wsConn)
     return nil

@@ -10,6 +10,7 @@
 - 支持跨节点推送：通过 Redis 查找用户所在节点，RPC 转发消息
 - 内置 HTTP 限流（固定窗口，支持 `dry_run` / `enforce` 两种模式）
 - 支持 WebSocket Origin 白名单和代理 URL 白名单
+- 支持优雅关闭（Graceful Shutdown）：收到 SIGINT/SIGTERM 后清理 Redis 会话，等待进行中的 HTTP 请求完成后退出
 
 ## 外部依赖
 

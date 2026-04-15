@@ -99,6 +99,20 @@ func push(msg *model.Message, serverAddr string) {
 
 func Init() *http.Server {
 	fmt.Println("httpServer is run")
+
+	// 注入跨节点推送回调：wsServer 查到目标节点后调用此函数完成 RPC 转发，
+	// 通过函数变量注入避免 wsServer ↔ httpServer 循环导入。
+	wsServer.CrossNodeSendFunc = func(serverAddr, wssid, message string) {
+		cl, ok := GetRpcClient(serverAddr)
+		if !ok {
+			fmt.Printf("cross-node send: rpc client to %s unavailable\n", serverAddr)
+			return
+		}
+		msg := &model.Message{Content: message, Wssid: wssid}
+		reply := new(model.Reply)
+		RpcCall(cl, msg, reply)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", httpHandlerIndex)
 	mux.HandleFunc("/test", httpHandlerTest)

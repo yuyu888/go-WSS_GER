@@ -10,6 +10,7 @@ import (
 const (
 	cacheExpire = 60 * time.Second
 	cachePrefix = "ws_go_"
+	wssidPrefix = "ws_go_wssid_"
 )
 
 type UserSession struct {
@@ -96,4 +97,24 @@ func (u UserSession) DelInfo(uid string, deviceid string) error {
 
 func (u UserSession) ExpireInfo(uid string) error {
 	return u.redisCli.Expire(cachePrefix+uid, cacheExpire)
+}
+
+// SaveWssid 保存 wssid → ws_server_addr 反向映射，供跨节点 broadcast 路由使用
+func (u UserSession) SaveWssid(wssid, serverAddr string) error {
+	return u.redisCli.Set(wssidPrefix+wssid, serverAddr, int(cacheExpire.Seconds()))
+}
+
+// GetWssidServer 根据 wssid 查询所在节点的 IP 地址
+func (u UserSession) GetWssidServer(wssid string) (string, error) {
+	return u.redisCli.Get(wssidPrefix + wssid)
+}
+
+// DelWssid 删除 wssid 反向映射
+func (u UserSession) DelWssid(wssid string) error {
+	return u.redisCli.Del(wssidPrefix + wssid)
+}
+
+// ExpireWssid 刷新 wssid 反向映射的 TTL
+func (u UserSession) ExpireWssid(wssid string) error {
+	return u.redisCli.Expire(wssidPrefix+wssid, cacheExpire)
 }

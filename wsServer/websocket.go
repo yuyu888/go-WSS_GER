@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"wssgo/model"
 )
 
 const (
@@ -98,6 +99,7 @@ func (wsConn *wsConnection) procLoop() {
 	go func() {
 		ticker := time.NewTicker(pingInterval)
 		defer ticker.Stop()
+		us := model.NewUserSession()
 		for {
 			select {
 			case <-ticker.C:
@@ -107,6 +109,13 @@ func (wsConn *wsConnection) procLoop() {
 					wsConn.wsClose()
 					return
 				}
+				// 刷新 Redis 会话 TTL，防止 60 秒后过期导致跨节点路由失效
+				uid := wsConn.loginUid
+				if uid == "" {
+					uid = wsConn.deviceId
+				}
+				us.ExpireInfo(uid)
+				us.ExpireWssid(wsConn.wssid)
 			case <-wsConn.closeChan:
 				return
 			}

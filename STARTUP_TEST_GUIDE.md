@@ -104,6 +104,18 @@ wsServer is run
 rpcServer is run on 192.168.x.x:50051
 ```
 
+### 优雅关闭
+
+服务支持优雅关闭，向进程发送 `SIGINT`（Ctrl+C）或 `SIGTERM`（Kubernetes pod 停止）后：
+
+1. 清理所有在线连接在 Redis 中的会话记录，防止产生幽灵连接
+2. HTTP Server 等待进行中的请求完成（最长 30 秒），之后退出
+
+```bash
+# 手动发送 SIGTERM
+kill -SIGTERM <pid>
+```
+
 ## 4. 基础自检
 
 ```bash
@@ -241,7 +253,11 @@ ws://host:port/ws?device_id=<设备号>
 
 ## 6. WebSocket 测试（cl-test.html）
 
-用浏览器直接打开项目根目录下的 `cl-test.html`。
+用浏览器直接打开项目根目录下的 `cl-test.html`，或通过 HTTP 访问（推荐，避免 `file://` 跨域问题）：
+
+```
+http://localhost:8189/test-client
+```
 
 页面顶部有 **WebSocket 地址输入框**，默认为：
 ```
@@ -262,13 +278,20 @@ curl "http://127.0.0.1:8189/"
 ```
 期望返回：`hello word`
 
-### 7.2 发送消息到指定 wssid（本节点）
+### 7.2 测试客户端页面
+
+```bash
+# 浏览器访问（避免 file:// 跨域问题，推荐）
+open http://127.0.0.1:8189/test-client
+```
+
+### 7.3 发送消息到指定 wssid（本节点）
 
 ```bash
 curl "http://127.0.0.1:8189/sendmsgtowssid?wssid=<wssid>&msg=hello"
 ```
 
-### 7.3 跨节点推送消息
+### 7.4 跨节点推送消息
 
 ```bash
 curl -X POST "http://127.0.0.1:8189/sendmsg?uid=<uid>&deviceid=<deviceid>" -d "msg=hello"
@@ -303,3 +326,4 @@ for i in {1..100}; do curl -s "http://127.0.0.1:8189/test?id=$i" -d "msg=x" >/de
 - **RPC 异常**：确认 `[rpc].port` 没有被其他进程占用（`lsof -i :50051`）。
 - **日志不落文件**：确认 `[base].env = "prod"` 且 `logdir` 目录存在且有写权限。
 - **代理请求被拒绝**：确认目标 URL 已加入 `[ws].allowed_urls` 白名单。
+- **优雅关闭后仍有残留会话**：确认 Redis 连通且 `DelInfo` 无报错，可查日志中 `Shutdown DelInfo failed` 记录。

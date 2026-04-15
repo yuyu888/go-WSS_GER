@@ -7,6 +7,9 @@ import (
 	"wssgo/model"
 )
 
+// CrossNodeSendFunc 跨节点推送回调，由 httpServer.Init() 注入，避免循环导入
+var CrossNodeSendFunc func(serverAddr, wssid, message string)
+
 // 客户端管理
 type ClientManager struct {
 	// 新创建的长连接 client
@@ -48,10 +51,19 @@ func (WsManager *ClientManager) ProcLoop() {
 					uid, conn.wsConn.deviceId, conn.wsConn.wssid, err)
 				WsClientPools.remove(conn.id)
 				conn.wsConn.wsClose()
+				continue
+			}
+			// 保存 wssid → serverAddr 反向映射，供跨节点 broadcast 路由
+			if err := usersession.SaveWssid(conn.wsConn.wssid, config.ServiceConf.LocalIp); err != nil {
+				libs.Logger.Errorf("SaveWssid failed, wssid=%s err=%v", conn.wsConn.wssid, err)
 			}
 
 		case conn := <-WsManager.unregister:
 			WsClientPools.remove(conn.id)
+			// 清理 wssid 反向映射
+			if err := usersession.DelWssid(conn.wsConn.wssid); err != nil {
+				libs.Logger.Errorf("DelWssid failed, wssid=%s err=%v", conn.wsConn.wssid, err)
+			}
 		}
 	}
 }
@@ -89,6 +101,9 @@ func (WsManager *ClientManager) Shutdown() {
 		if err := usersession.DelInfo(uid, conn.deviceId); err != nil {
 			libs.Logger.Errorf("Shutdown DelInfo failed, uid=%s deviceId=%s wssid=%s err=%v",
 				uid, conn.deviceId, conn.wssid, err)
+		}
+		if err := usersession.DelWssid(conn.wssid); err != nil {
+			libs.Logger.Errorf("Shutdown DelWssid failed, wssid=%s err=%v", conn.wssid, err)
 		}
 	})
 }
