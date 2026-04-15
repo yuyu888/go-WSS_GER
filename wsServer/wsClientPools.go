@@ -26,3 +26,10 @@ func (WsClientPools *ClientPools) get(uuid string) (*Client, bool) {
 	}
 	return cl, ok
 }
+
+func (WsClientPools *ClientPools) forEach(fn func(id string, client *Client)) {
+	WsClientPools.scene.Range(func(key, value interface{}) bool {
+		fn(key.(string), value.(*Client))
+		return true
+	})
+}

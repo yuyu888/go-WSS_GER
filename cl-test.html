@@ -11,6 +11,8 @@
         .send-msg { color: #D50000; }
         .recv-msg { color: #1565C0; }
         .sys-msg  { color: #558B2F; }
+        .section  { margin-top: 10px; padding: 8px; background: #f5f5f5; border-radius: 4px; }
+        .section-title { font-weight: bold; margin-bottom: 6px; font-size: 13px; color: #333; }
     </style>
     <script>
         window.addEventListener("load", function () {
@@ -28,14 +30,37 @@
                 output.scrollTop = output.scrollHeight;
             }
 
-            // 连接建立后，从服务端 wsInit 消息中提取 wssid 并自动替换发送框中的占位符
             function applyWssid(wssid) {
                 currentWssid = wssid;
                 document.getElementById("wssid-display").textContent = wssid;
-                // 把发送框里所有 __WSSID__ 占位符替换为真实值
                 msgArea.value = msgArea.value.replace(/__WSSID__/g, wssid);
             }
 
+            // 第一步：通过 HTTP 请求设置 uid Cookie
+            document.getElementById("set-uid").onclick = function () {
+                var uid = document.getElementById("uid-input").value.trim();
+                if (!uid) {
+                    print("✗ 请输入 uid", "sys-msg");
+                    return false;
+                }
+                // 从 WS 地址中提取 HTTP base URL
+                var wsUrl = document.getElementById("wsurl").value;
+                var httpBase = wsUrl.replace(/^ws(s?):\/\//, "http$1://").replace(/\/ws.*$/, "");
+                var setUrl = httpBase + "/?uid=" + encodeURIComponent(uid);
+
+                // 发 HTTP 请求，浏览器会保存返回的 Set-Cookie
+                fetch(setUrl, { credentials: "include" })
+                    .then(function () {
+                        document.getElementById("uid-status").textContent = uid;
+                        print("✓ uid 已设置为：" + uid + "，Cookie 写入成功，现在可以点 Open", "sys-msg");
+                    })
+                    .catch(function (e) {
+                        print("✗ 设置 uid 失败：" + e, "sys-msg");
+                    });
+                return false;
+            };
+
+            // 第二步：建立 WebSocket 连接（浏览器会自动携带已有 Cookie）
             document.getElementById("open").onclick = function () {
                 if (ws) return false;
                 var url = document.getElementById("wsurl").value;
@@ -51,7 +76,6 @@
                 };
                 ws.onmessage = function (evt) {
                     print("← " + evt.data, "recv-msg");
-                    // 自动提取 wsInit 下发的 wssid
                     try {
                         var data = JSON.parse(evt.data);
                         if (data.action === "wsInit" && data.wssid) {
@@ -60,8 +84,8 @@
                         }
                     } catch (e) {}
                 };
-                ws.onerror = function (evt) {
-                    print("✗ 错误：" + evt.data, "sys-msg");
+                ws.onerror = function () {
+                    print("✗ 连接失败（请确认服务已启动且地址正确）", "sys-msg");
                 };
                 return false;
             };
@@ -129,41 +153,76 @@
 <h3>WebSocket 测试客户端</h3>
 <table width="100%">
     <tr>
-        <td valign="top" width="35%">
-            <div>
-                <label>服务器地址：</label>
-                <input id="wsurl" type="text" style="width:320px;"
-                       value="ws://localhost:8189/ws?device_id=aaa"/>
-            </div>
-            <div style="margin-top:6px;">
-                <label>当前 wssid：</label>
-                <span id="wssid-display" style="color:#888;">（未连接）</span>
-            </div>
-            <div style="margin-top:10px;">
-                <button id="open">Open</button>
-                <button id="close">Close</button>
-                <button id="clear">Clear</button>
+        <td valign="top" width="38%">
+
+            <!-- 第一步：设置 uid -->
+            <div class="section">
+                <div class="section-title">第一步：设置登录用户（uid）</div>
+                <div>
+                    <label>uid：</label>
+                    <input id="uid-input" type="text" style="width:160px;" placeholder="例如 userA"/>
+                    <button id="set-uid">设置 uid</button>
+                </div>
+                <div style="margin-top:4px; font-size:12px; color:#888;">
+                    当前 uid：<span id="uid-status" style="color:#333;">（未设置）</span>
+                    &nbsp;｜&nbsp; 多设备测试时，不同标签页设置相同 uid 再连接
+                </div>
             </div>
 
-            <div style="margin-top:14px;">
-                <label>预设用例：</label>
-                <select id="preset">
-                    <option value="">-- 选择 --</option>
-                    <option value="req_resp">req&amp;resp（HTTP 代理）</option>
-                    <option value="broadcast">broadcast（推送消息）</option>
-                </select>
+            <!-- 第二步：建立连接 -->
+            <div class="section">
+                <div class="section-title">第二步：建立 WebSocket 连接</div>
+                <div>
+                    <label>服务器地址：</label>
+                    <input id="wsurl" type="text" style="width:280px;"
+                           value="ws://localhost:8189/ws?device_id=device1"/>
+                </div>
+                <div style="margin-top:6px;">
+                    <label>当前 wssid：</label>
+                    <span id="wssid-display" style="color:#888; font-size:12px;">（未连接）</span>
+                </div>
+                <div style="margin-top:8px;">
+                    <button id="open">Open</button>
+                    <button id="close">Close</button>
+                    <button id="clear">Clear</button>
+                </div>
             </div>
 
-            <div style="margin-top:8px;">
-                <textarea id="msg" rows="18" cols="55">{"wssid":"__WSSID__","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http://localhost:8189/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+            <!-- 第三步：发送消息 -->
+            <div class="section">
+                <div class="section-title">第三步：发送消息</div>
+                <div>
+                    <label>预设用例：</label>
+                    <select id="preset">
+                        <option value="">-- 选择 --</option>
+                        <option value="req_resp">req&amp;resp（HTTP 代理）</option>
+                        <option value="broadcast">broadcast（推送消息）</option>
+                    </select>
+                </div>
+                <div style="margin-top:8px;">
+                    <textarea id="msg" rows="16" cols="52">{"wssid":"__WSSID__","request_id":"d4f50517-0005-49f1-bd18-85ab24cfe701","request_data":{"http_method":"POST","request_url":"http://localhost:8189/test?id=11111","post_data":"msg=ddddd&ww=eee","headers":{"test":"www"}},"request_type":"req&resp","action":"user.showInfo"}</textarea>
+                </div>
+                <div style="margin-top:6px;">
+                    <button id="send">Send</button>
+                </div>
             </div>
-            <div style="margin-top:6px;">
-                <button id="send">Send</button>
+
+            <!-- 多设备测试说明 -->
+            <div style="margin-top:10px; font-size:12px; color:#666; line-height:1.8;">
+                <b>多设备测试步骤：</b><br>
+                1. 打开两个浏览器标签页，各自打开此页面<br>
+                2. 两个页面填写相同 uid，点「设置 uid」<br>
+                3. 两个页面填写不同 device_id（如 device1 / device2），点 Open<br>
+                4. 执行以下 curl，两个连接都应收到消息：<br>
+                <code style="background:#eee; padding:2px 4px;">
+                    curl -X POST "http://127.0.0.1:8189/sendmsg?uid=userA" -d "msg=hello"
+                </code>
             </div>
+
         </td>
-        <td valign="top" width="65%" style="padding-left:16px;">
+        <td valign="top" width="62%" style="padding-left:16px;">
             <div id="output"
-                 style="border:1px solid #ccc; padding:8px; height:520px; overflow-y:auto; background:#fafafa;">
+                 style="border:1px solid #ccc; padding:8px; height:580px; overflow-y:auto; background:#fafafa;">
             </div>
         </td>
     </tr>

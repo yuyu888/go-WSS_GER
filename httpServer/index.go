@@ -97,13 +97,18 @@ func push(msg *model.Message, serverAddr string) {
 	RpcCall(cl, msg, reply)
 }
 
-func Init() {
+func Init() *http.Server {
 	fmt.Println("httpServer is run")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", httpHandlerIndex)
 	mux.HandleFunc("/test", httpHandlerTest)
 	mux.HandleFunc("/sendmsgtowssid", httpHandlerSendMsgToWssid)
 	mux.HandleFunc("/sendmsg", httpHandlerSendMsg)
+	mux.HandleFunc("/ws", wsServer.HttpHandler())
+	// 托管测试页面，避免 file:// 协议导致的跨域问题
+	mux.HandleFunc("/test-client", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "cl-test.html")
+	})
 
 	handler := http.Handler(mux)
 	handler = wrapWithBodyLimit(handler, config.ServiceConf.HttpConf.MaxBodyBytes)
@@ -116,7 +121,10 @@ func Init() {
 		WriteTimeout: timeoutDuration(config.ServiceConf.HttpConf.WriteTimeoutSec),
 		IdleTimeout:  timeoutDuration(config.ServiceConf.HttpConf.IdleTimeoutSec),
 	}
-	if err := srv.ListenAndServe(); err != nil {
-		fmt.Printf("http server stopped: %v\n", err)
-	}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("http server stopped: %v\n", err)
+		}
+	}()
+	return srv
 }

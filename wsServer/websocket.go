@@ -11,11 +11,10 @@ import (
 )
 
 const (
-	// 心跳间隔：100 秒无消息则发送心跳
-	heartbeatInterval = 100 * time.Second
-	// 读超时：超过该时间没有读到任何帧则关闭连接
-	// 设为心跳间隔的 1.5 倍，给客户端足够时间响应
-	readDeadline = 150 * time.Second
+	// 每隔 30 秒发一次 Ping
+	pingInterval = 30 * time.Second
+	// 60 秒内没收到 Pong 则断开（必须大于 pingInterval）
+	pongWait = 60 * time.Second
 )
 
 // http 升级 websocket 协议的配置
@@ -43,22 +42,26 @@ type wsConnection struct {
 	wssid     string   // ws 链接 id，连接建立时产生
 	loginUid  string   // 登录用户 uid
 	deviceId  string   // 设备号
-	isDynamic bool     // 是否活跃
 }
 
 func (wsConn *wsConnection) wsReadLoop() {
 	defer close(wsConn.inChan)
-	for {
-		// 每次读之前刷新读超时，保证长空闲连接能被检测到
-		_ = wsConn.wsSocket.SetReadDeadline(time.Now().Add(readDeadline))
 
+	// 设置初始读超时
+	wsConn.wsSocket.SetReadDeadline(time.Now().Add(pongWait))
+
+	// 收到 Pong 时重置读超时，保证连接活跃
+	wsConn.wsSocket.SetPongHandler(func(string) error {
+		wsConn.wsSocket.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	for {
 		msgType, data, err := wsConn.wsSocket.ReadMessage()
 		if err != nil {
 			goto error
 		}
-		wsConn.isDynamic = true
 		req := &wsMessage{msgType, data}
-
 		select {
 		case wsConn.inChan <- req:
 		case <-wsConn.closeChan:
@@ -78,7 +81,6 @@ func (wsConn *wsConnection) wsWriteLoop() {
 			if !ok || msg == nil {
 				goto closed
 			}
-			wsConn.isDynamic = true
 			if err := wsConn.wsSocket.WriteMessage(msg.messageType, msg.data); err != nil {
 				goto error
 			}
@@ -92,20 +94,16 @@ closed:
 }
 
 func (wsConn *wsConnection) procLoop() {
-	// 启动心跳 goroutine
+	// 启动 Ping 心跳 goroutine
 	go func() {
-		ticker := time.NewTicker(heartbeatInterval)
+		ticker := time.NewTicker(pingInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				if wsConn.isDynamic {
-					wsConn.isDynamic = false
-					continue
-				}
-				heartBeat := `{"errcode":200, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"heartbeat from server","action":"wsHeartBeat"}`
-				if err := wsConn.wsWrite(websocket.TextMessage, []byte(heartBeat)); err != nil {
-					fmt.Println("heartbeat fail")
+				// 发送标准 WebSocket Ping 帧，客户端浏览器会自动回 Pong
+				if err := wsConn.wsWrite(websocket.PingMessage, []byte{}); err != nil {
+					fmt.Println("ping fail, closing connection")
 					wsConn.wsClose()
 					return
 				}
@@ -125,7 +123,6 @@ func (wsConn *wsConnection) procLoop() {
 			fmt.Println("read fail")
 			break
 		}
-		// 在派发 goroutine 之前先 Add，避免 break 时 wg.Wait 看到未完成的计数
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(data []byte) {
@@ -158,8 +155,8 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
 		isClosed:  false,
 	}
 	if deviceId == "" {
-		errResp := `{"errcode":4001, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"Lack of device_id","action":"error"}`
-		wsConn.wsSocket.WriteMessage(1, []byte(errResp))
+		errResp := `{"errcode":4001,"wssid":"","request_id":"","response_data":"Lack of device_id","action":"error"}`
+		wsConn.wsSocket.WriteMessage(websocket.TextMessage, []byte(errResp))
 		wsConn.wsSocket.Close()
 		return
 	}
@@ -168,7 +165,6 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
 	loginUid, err := req.Cookie("uid")
 	if err == nil {
 		wsConn.loginUid = loginUid.Value
-		fmt.Println(loginUid.Value)
 	} else {
 		wsConn.loginUid = ""
 	}
@@ -214,7 +210,7 @@ func (wsConn *wsConnection) wsClose() {
 
 func (wsConn *wsConnection) wsInit() {
 	wsConn.wssid = uuid.NewV4().String()
-	resp := `{"errcode":200, "wssid":"` + wsConn.wssid + `","request_id":"","response_data":"websocket create success","action":"wsInit"}`
+	resp := `{"errcode":200,"wssid":"` + wsConn.wssid + `","request_id":"","response_data":"websocket create success","action":"wsInit"}`
 	wsConn.wsWrite(websocket.TextMessage, []byte(resp))
 	WsManager.doRegister(wsConn)
 }
@@ -223,5 +219,9 @@ func Init() {
 	fmt.Println("wsServer is run")
 	InitUrlList()
 	go WsManager.ProcLoop()
-	http.HandleFunc("/ws", wsHandler)
+}
+
+// HttpHandler 返回 WebSocket 升级处理函数，供 httpServer 注册到统一 mux
+func HttpHandler() http.HandlerFunc {
+	return wsHandler
 }

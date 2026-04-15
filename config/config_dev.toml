@@ -37,7 +37,7 @@ max_body_bytes = 1048576
 [ws]
 # ws 代理请求允许转发的 URL 白名单（精确匹配 scheme+host+path）
 allowed_urls = [
-    "http://localhost/test",
+    "http://localhost:8189/test",
 ]
 # WebSocket 允许的 Origin 白名单（精确匹配含协议和端口，为空则允许所有来源）
 allowed_origins = []

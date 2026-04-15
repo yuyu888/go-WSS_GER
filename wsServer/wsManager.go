@@ -76,3 +76,19 @@ func (WsManager *ClientManager) DoSendMsgToWssid(wssid string, message []byte) {
 		fmt.Println("websocket link is drop")
 	}
 }
+
+// Shutdown 清理所有在线连接在 Redis 中的会话记录，在进程退出前调用。
+func (WsManager *ClientManager) Shutdown() {
+	usersession := model.NewUserSession()
+	WsClientPools.forEach(func(_ string, client *Client) {
+		conn := client.wsConn
+		uid := conn.loginUid
+		if uid == "" {
+			uid = conn.deviceId
+		}
+		if err := usersession.DelInfo(uid, conn.deviceId); err != nil {
+			libs.Logger.Errorf("Shutdown DelInfo failed, uid=%s deviceId=%s wssid=%s err=%v",
+				uid, conn.deviceId, conn.wssid, err)
+		}
+	})
+}

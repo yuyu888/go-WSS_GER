@@ -100,8 +100,8 @@ go run main.go -env=prod
 启动后应能看到：
 ```
 httpServer is run
-rpcServer is run on 192.168.x.x:50051
 wsServer is run
+rpcServer is run on 192.168.x.x:50051
 ```
 
 ## 4. 基础自检
@@ -112,7 +112,134 @@ go test ./...
 
 无报错即表示代码编译通过。
 
-## 5. WebSocket 测试（cl-test.html）
+## 5. WebSocket 消息协议
+
+### 5.1 连接建立
+
+连接 URL 格式：
+```
+ws://host:port/ws?device_id=<设备号>
+```
+
+- `device_id`：必填，标识客户端设备
+- 可选：在请求头携带 `Cookie: uid=<用户ID>`，用于标识登录用户
+
+连接成功后服务端立即下发 `wsInit` 消息：
+```json
+{
+  "errcode": 200,
+  "wssid": "f3feefd9-9e5d-450f-900a-873b7a736aa6",
+  "request_id": "",
+  "response_data": "websocket create success",
+  "action": "wsInit"
+}
+```
+
+> `wssid` 是本次连接的唯一标识，后续所有请求都需要携带。
+
+### 5.2 请求消息结构（客户端 → 服务端）
+
+所有请求均为 JSON 格式，公共字段如下：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `wssid` | string | 是 | 连接建立时服务端下发的唯一标识 |
+| `request_id` | string | 是 | 本次请求的唯一 ID，建议使用 UUID，原样回显到响应 |
+| `request_type` | string | 是 | 请求类型，见下方说明 |
+| `action` | string | 是 | 业务动作标识，原样回显到响应 |
+| `request_data` | object | 是 | 请求数据，内容因 `request_type` 而异 |
+
+### 5.3 request_type：req&resp（HTTP 代理）
+
+客户端通过 WebSocket 发起 HTTP 请求，服务端代理转发后将结果推回。
+
+目标 URL 必须在服务端白名单（`config/config_*.toml` 的 `[ws].allowed_urls`）中，仅支持 GET 和 POST 方法。
+
+**request_data 字段：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `http_method` | string | 是 | 请求方法，仅支持 `GET` 或 `POST` |
+| `request_url` | string | 是 | 目标 URL，GET 请求参数拼在 URL 后面 |
+| `post_data` | string | 是 | POST 请求体，GET 时传空字符串 `""` |
+| `headers` | object | 是 | 自定义请求头，无则传 `{}` |
+
+**请求示例：**
+```json
+{
+  "wssid": "f3feefd9-9e5d-450f-900a-873b7a736aa6",
+  "request_id": "d4f50517-0005-49f1-bd18-85ab24cfe701",
+  "request_type": "req&resp",
+  "action": "user.showInfo",
+  "request_data": {
+    "http_method": "POST",
+    "request_url": "http://localhost:8189/test?id=11111",
+    "post_data": "msg=ddddd&ww=eee",
+    "headers": {
+      "test": "www"
+    }
+  }
+}
+```
+
+### 5.4 request_type：broadcast（推送消息）
+
+向本节点上指定 `wssid` 的连接推送一条消息。
+
+**request_data 字段：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `wssid` | string | 是 | 目标连接的 wssid |
+| `message` | string | 是 | 要推送的消息内容 |
+
+**请求示例：**
+```json
+{
+  "wssid": "f3feefd9-9e5d-450f-900a-873b7a736aa6",
+  "request_id": "e7f2c744-1af1-49fb-b1fc-b859b08d9a26",
+  "request_type": "broadcast",
+  "action": "push.msg",
+  "request_data": {
+    "wssid": "f3feefd9-9e5d-450f-900a-873b7a736aa6",
+    "message": "hello from broadcast"
+  }
+}
+```
+
+### 5.5 响应消息结构（服务端 → 客户端）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `errcode` | int | 状态码，200 为成功 |
+| `wssid` | string | 连接标识，原样回显 |
+| `request_id` | string | 请求 ID，原样回显 |
+| `action` | string | 业务动作，原样回显 |
+| `response_data` | string | 响应内容，成功时为业务数据，失败时为错误描述 |
+
+### 5.6 错误码说明
+
+| errcode | 说明 |
+|---------|------|
+| 200 | 成功 |
+| 4201 | 缺少 request_id |
+| 4202 | 缺少 wssid |
+| 4203 | 缺少 request_type |
+| 4204 | 缺少 request_data |
+| 4205 | 缺少 action |
+| 4101 | http_method 缺失或不支持（仅支持 GET/POST） |
+| 4102 | 缺少 request_url |
+| 4103 | 缺少 post_data |
+| 4104 | 缺少 headers |
+| 4004 | 消息格式错误，非合法 JSON |
+| 4006 | request_type 不支持 |
+| 5001 | 代理请求失败（目标服务返回非 200） |
+
+### 5.7 心跳机制
+
+服务端每 **30 秒**发送一次标准 WebSocket **Ping 帧**，浏览器会自动回复 **Pong 帧**，无需客户端额外处理。若 **60 秒**内未收到 Pong，服务端将主动断开连接。
+
+## 6. WebSocket 测试（cl-test.html）
 
 用浏览器直接打开项目根目录下的 `cl-test.html`。
 
@@ -121,28 +248,27 @@ go test ./...
 ws://localhost:8189/ws?device_id=aaa
 ```
 
-可直接修改地址后点击 **Open** 建立连接，成功后会看到：
-- `OPEN`
-- 服务端返回的 `wsInit` 消息（包含 `wssid`）
+操作步骤：
+1. 点击 **Open** 建立连接，成功后 `wssid` 自动显示在页面上并填入发送框
+2. 下拉框选择预设用例（`req&resp` 或 `broadcast`），或手动编辑 JSON
+3. 点击 **Send** 发送，蓝色为收到的响应，红色为发出的消息
 
-点击 **Send** 发送默认 JSON 消息，成功时会看到 `RESPONSE` 返回结果。
+## 7. HTTP 接口测试
 
-## 6. HTTP 接口测试
-
-### 6.1 首页
+### 7.1 首页
 
 ```bash
 curl "http://127.0.0.1:8189/"
 ```
 期望返回：`hello word`
 
-### 6.2 发送消息到指定 wssid（本节点）
+### 7.2 发送消息到指定 wssid（本节点）
 
 ```bash
 curl "http://127.0.0.1:8189/sendmsgtowssid?wssid=<wssid>&msg=hello"
 ```
 
-### 6.3 跨节点推送消息
+### 7.3 跨节点推送消息
 
 ```bash
 curl -X POST "http://127.0.0.1:8189/sendmsg?uid=<uid>&deviceid=<deviceid>" -d "msg=hello"
@@ -150,7 +276,7 @@ curl -X POST "http://127.0.0.1:8189/sendmsg?uid=<uid>&deviceid=<deviceid>" -d "m
 
 流程：根据 `uid`/`deviceid` 查 Redis 会话 → 找到目标节点 IP → RPC 调用推送。
 
-## 7. 限流验证（可选）
+## 8. 限流验证（可选）
 
 ### 观察模式（推荐先做）
 
@@ -169,10 +295,11 @@ for i in {1..100}; do curl -s "http://127.0.0.1:8189/test?id=$i" -d "msg=x" >/de
 {"errcode": 4290, "response_data": "rate limit exceeded"}
 ```
 
-## 8. 常见问题排查
+## 9. 常见问题排查
 
 - **端口被占用**：修改 `[http].addr` 后重启。
 - **连接不上 WebSocket**：检查 `cl-test.html` 地址栏里的端口是否和 `http.addr` 一致。
 - **Redis 连接失败**：先用命令行测试连通性，哨兵模式确认 `sentinel_addrs` 和 `master_name` 正确。
 - **RPC 异常**：确认 `[rpc].port` 没有被其他进程占用（`lsof -i :50051`）。
 - **日志不落文件**：确认 `[base].env = "prod"` 且 `logdir` 目录存在且有写权限。
+- **代理请求被拒绝**：确认目标 URL 已加入 `[ws].allowed_urls` 白名单。
